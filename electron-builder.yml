@@ -47,6 +47,11 @@ mac:
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
 
+# Stable DMG filename (no version/arch) → TokenMaxxing.dmg, so the download URL
+# never changes. The auto-update .zip keeps its default (versioned) name.
+dmg:
+  artifactName: ${productName}.${ext}
+
 win:
   target:
     - nsis
@@ -72,3 +77,5 @@ publish:
   provider: github
   owner: Launch-Craft
   repo: TokenMaxxing-Desktop
+  # Publish a real (non-draft) release so `releases/latest/download/...` resolves.
+  releaseType: release

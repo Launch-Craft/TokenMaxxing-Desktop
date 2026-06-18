@@ -5,6 +5,7 @@ import { createWindow } from './window'
 import { registerIpc } from './ipc'
 import { createServices, getServices } from './services/createServices'
 import { closeDataStore } from './db'
+import { initAutoUpdater } from './services/UpdaterService'
 import { TrayController } from './tray'
 import { createLogger } from './utils/logger'
 
@@ -102,6 +103,9 @@ if (!gotLock) {
     // Auto-scan on launch if configured, then start the continuous local-analysis
     // loop (every 10s, incremental — warm passes are near no-ops).
     void maybeAutoScan().finally(() => svc.live.start())
+
+    // Check for app updates (GitHub Releases) and self-update in the background.
+    initAutoUpdater(() => mainWindow)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
