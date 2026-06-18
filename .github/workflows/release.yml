@@ -20,7 +20,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest # Apple Silicon runner → arm64 build
-    timeout-minutes: 40 # bound runaway signing/notarization hangs (fast path is ~5 min)
+    timeout-minutes: 90 # signing + Apple notarization can legitimately take 45-60 min
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,6 +64,20 @@ jobs:
         if: steps.guard.outputs.exists == 'false'
         run: npm run build
 
+      # Import the Developer ID cert into a properly-configured keychain BEFORE
+      # electron-builder runs. This is the fix for codesign hanging on CI: this
+      # action runs `security set-key-partition-list`, which lets codesign use the
+      # private key non-interactively. Without it, codesign blocks on an invisible
+      # keychain-access prompt that can never be answered on a headless runner,
+      # and the build hangs until it times out. Skipped for fast/unsigned builds.
+      # (v3 is stable and battle-tested; v6/v7 exist with the same inputs.)
+      - name: Import signing certificate
+        if: steps.guard.outputs.exists == 'false' && github.event.inputs.sign != 'false'
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CSC_LINK }}
+          p12-password: ${{ secrets.CSC_KEY_PASSWORD }}
+
       - name: Package & publish to GitHub Releases
         if: steps.guard.outputs.exists == 'false'
         env:
@@ -72,22 +86,26 @@ jobs:
           # install (no Gatekeeper warning). It's slow (~20-30 min on Apple's
           # servers) but fully automatic. For a fast ad-hoc test build, run the
           # workflow manually and untick "sign".
+          #
+          # NOTE: we deliberately do NOT pass CSC_LINK here. The cert is already in
+          # the keychain from the "Import signing certificate" step, and
+          # electron-builder auto-discovers it. Passing CSC_LINK would make
+          # electron-builder build its own keychain instead — the path that hangs.
           SIGN: ${{ github.event.inputs.sign == 'false' && 'false' || 'true' }}
-          # Code signing (Developer ID .p12 as base64). Only used when SIGN=true.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # Notarization creds (used by scripts/notarize.cjs). Only used when SIGN=true.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          DEBUG: '@electron/notarize*' # progress logs if notarization is ever enabled
+          # Verbose logs for signing + notarization so we can see exactly where a
+          # slow/hung build is stuck (which file codesign is on, notarize upload, …).
+          DEBUG: 'electron-builder,@electron/notarize*'
         run: |
           if [ "$SIGN" != "true" ]; then
-            # Fast path: strip the cert/Apple creds so electron-builder skips
-            # Developer ID signing and scripts/notarize.cjs skips Apple. afterPack
-            # ad-hoc signs instead (user gets a one-time right-click→Open prompt).
+            # Fast path: no cert was imported, so disable signing discovery and
+            # skip Apple. afterPack ad-hoc signs instead (user gets a one-time
+            # Gatekeeper prompt). Run with sign=true for a clean, notarized build.
             echo "Signing disabled → fast ad-hoc build. Run with sign=true to notarize."
-            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
           npx electron-builder --mac --publish always
