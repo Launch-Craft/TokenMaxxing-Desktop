@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       sign:
-        description: 'Sign + notarize with Apple Developer ID (slow, ~20-30 min). Off = fast ad-hoc build.'
+        description: 'Sign + notarize with Apple (clean install, ~20-30 min). Untick for a fast ad-hoc test build (shows a Gatekeeper warning).'
         type: boolean
-        default: false
+        default: true
 
 # Lets the built-in GITHUB_TOKEN create the GitHub Release + tag.
 permissions:
@@ -68,10 +68,11 @@ jobs:
         if: steps.guard.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Apple signing + notarization is opt-in (slow: ~20-30 min on Apple's
-          # servers). Default builds take the fast ad-hoc path. Re-enable by
-          # running the workflow manually with sign=true.
-          SIGN: ${{ github.event.inputs.sign || 'false' }}
+          # Apple signing + notarization runs by default so users get a clean
+          # install (no Gatekeeper warning). It's slow (~20-30 min on Apple's
+          # servers) but fully automatic. For a fast ad-hoc test build, run the
+          # workflow manually and untick "sign".
+          SIGN: ${{ github.event.inputs.sign == 'false' && 'false' || 'true' }}
           # Code signing (Developer ID .p12 as base64). Only used when SIGN=true.
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}

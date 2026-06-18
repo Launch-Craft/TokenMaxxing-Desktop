@@ -23,6 +23,9 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null): void {
 
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  // Never let a crafted/older feed push a downgrade to a vulnerable version.
+  autoUpdater.allowDowngrade = false
+  autoUpdater.allowPrerelease = false
 
   let notifiedFallback = false
   const openDownloadFallback = (version?: string): void => {

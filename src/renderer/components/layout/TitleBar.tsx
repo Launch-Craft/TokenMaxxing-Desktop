@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Minus, Shield, Square, X } from 'lucide-react'
+import { Cloud, Minus, Shield, Square, X } from 'lucide-react'
 import { NAV_ITEMS, SECONDARY_NAV } from './nav'
 import { useAppStore } from '@/stores/useAppStore'
+import { useSettingsStore } from '@/stores/useSettingsStore'
 import { client } from '@/lib/ipc'
 import { cn } from '@/lib/utils'
 
@@ -43,6 +44,7 @@ function WinControl({
 export function TitleBar(): JSX.Element {
   const title = usePageTitle()
   const isMac = useAppStore((s) => s.isMac)
+  const cloudOn = useSettingsStore((s) => s.settings?.privacy.cloudSyncEnabled ?? false)
 
   return (
     <header className="drag flex h-11 shrink-0 items-center justify-between border-b border-white/5 bg-black/10 pr-1">
@@ -55,8 +57,17 @@ export function TitleBar(): JSX.Element {
           onClick={() => void client.app.openExternal('https://tokenmaxxing.app/privacy')}
           className="no-drag mr-1 hidden items-center gap-1.5 rounded-full border border-white/5 bg-white/[0.03] px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground sm:flex"
         >
-          <Shield className="h-3 w-3 text-primary" />
-          Private · Local only
+          {cloudOn ? (
+            <>
+              <Cloud className="h-3 w-3 text-primary" />
+              Cloud rankings on
+            </>
+          ) : (
+            <>
+              <Shield className="h-3 w-3 text-primary" />
+              Private · Local only
+            </>
+          )}
         </button>
 
         {!isMac && (

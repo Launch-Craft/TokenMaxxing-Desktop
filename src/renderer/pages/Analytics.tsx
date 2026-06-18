@@ -76,9 +76,10 @@ export default function Analytics(): JSX.Element {
       if (s.model) models.set(s.model, (models.get(s.model) ?? 0) + s.estimatedTokens)
     }
     const projList = [...projects.entries()].sort((a, b) => b[1].tokens - a[1].tokens).slice(0, 6)
-    const projMax = projList[0]?.[1].tokens ?? 1
+    // Math.max(1, …) guards a top entry whose value is exactly 0 (0/0 = NaN width).
+    const projMax = Math.max(1, projList[0]?.[1].tokens ?? 0)
     const modelList = [...models.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
-    const modelMax = modelList[0]?.[1] ?? 1
+    const modelMax = Math.max(1, modelList[0]?.[1] ?? 0)
     return {
       topProjects: projList.map(([name, v]) => ({
         key: name,

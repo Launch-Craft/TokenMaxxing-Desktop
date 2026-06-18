@@ -13,7 +13,9 @@ export function ToolUsageList({
   data: ToolBreakdownSlice[]
   periodWord?: string
 }): JSX.Element {
-  const max = data[0]?.tokens ?? 1
+  // Math.max(1, …) — `?? 1` wouldn't guard a top item whose value is exactly 0,
+  // which would make the bar-width math 0/0 = NaN.
+  const max = Math.max(1, data[0]?.tokens ?? 0)
   return (
     <Card className="flex h-full flex-col p-5">
       <div className="mb-4">

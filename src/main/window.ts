@@ -48,6 +48,19 @@ export function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // Block top-frame navigation away from the app bundle. Without this, an
+  // injected link or redirect could load remote content into the renderer with
+  // the privileged preload bridge still attached. Same-origin navigation (and
+  // SPA history/hash routing, which doesn't fire this) stays allowed.
+  const appOrigin = isDev ? (process.env.ELECTRON_RENDERER_URL as string) : 'file://'
+  const blockOffOrigin = (e: Electron.Event, url: string): void => {
+    if (url.startsWith(appOrigin)) return
+    e.preventDefault()
+    if (url.startsWith('http:') || url.startsWith('https:')) void shell.openExternal(url)
+  }
+  win.webContents.on('will-navigate', (e, url) => blockOffOrigin(e, url))
+  win.webContents.on('will-redirect', (e, url) => blockOffOrigin(e, url))
+
   if (isDev) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL as string)
     win.webContents.openDevTools({ mode: 'detach' })

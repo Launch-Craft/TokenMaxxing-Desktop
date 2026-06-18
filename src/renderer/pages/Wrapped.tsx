@@ -52,7 +52,14 @@ export default function Wrapped(): JSX.Element {
 
   useEffect(() => {
     setReport(null)
-    void client.wrapped.get(year).then(setReport)
+    // Ignore a stale response if `year` changes again before this resolves.
+    let cancelled = false
+    void client.wrapped.get(year).then((r) => {
+      if (!cancelled) setReport(r)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [year])
 
   const handleSave = useCallback(async () => {

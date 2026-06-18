@@ -128,6 +128,8 @@ export class SqliteDataStore implements DataStore {
     this.db = new DatabaseCtor(filePath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')
+    // Wait (instead of throwing SQLITE_BUSY) if a writer/checkpoint holds the lock.
+    this.db.pragma('busy_timeout = 5000')
     this.db.exec(SCHEMA)
     this.migrate()
     log.info('opened database at', filePath)
@@ -135,6 +137,13 @@ export class SqliteDataStore implements DataStore {
 
   private migrate(): void {
     const current = (this.db.pragma('user_version', { simple: true }) as number) ?? 0
+    if (current > SCHEMA_VERSION) {
+      // DB was written by a newer app version (e.g. after a downgrade). The
+      // idempotent schema above keeps our expected columns present, so we can
+      // read it, but flag it rather than silently bumping the version down.
+      log.warn(`database schema v${current} is newer than this app (v${SCHEMA_VERSION})`)
+      return
+    }
     if (current < 2) {
       // v2: incremental scanning — add source_key to sessions (table/index +
       // scan_checkpoints are created by the idempotent schema above).

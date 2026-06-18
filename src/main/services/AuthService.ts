@@ -1,7 +1,11 @@
+import { randomUUID } from 'node:crypto'
 import { shell } from 'electron'
 import type { AuthProvider, AuthState, AuthUser } from '@shared/types'
+import { DEFAULT_SETTINGS } from '@shared/constants'
 import type { DataStore } from '../db'
 import { createLogger } from '../utils/logger'
+
+const PROVIDERS: AuthProvider[] = ['google', 'github']
 
 const log = createLogger('auth')
 const META_KEY = 'auth.user'
@@ -17,6 +21,9 @@ const PROTOCOL = process.env.VITE_APP_PROTOCOL || 'tokenmaxxing'
 export class AuthService {
   private state: AuthState = { status: 'signed-out', user: null }
   private onChange?: (state: AuthState) => void
+  private listeners = new Set<(state: AuthState) => void>()
+  /** Random nonce for the in-flight OAuth attempt; guards against forged callbacks. */
+  private pendingState: string | null = null
 
   constructor(private store: DataStore) {
     const raw = store.meta.get(META_KEY)
@@ -33,12 +40,19 @@ export class AuthService {
     this.onChange = cb
   }
 
+  /** Add an extra auth-state listener (e.g. the tray). Returns an unsubscribe fn. */
+  subscribe(cb: (state: AuthState) => void): () => void {
+    this.listeners.add(cb)
+    return () => this.listeners.delete(cb)
+  }
+
   getState(): AuthState {
     return this.state
   }
 
   private emit(): void {
     this.onChange?.(this.state)
+    for (const l of this.listeners) l(this.state)
   }
 
   private baseUrl(): string | null {
@@ -53,7 +67,11 @@ export class AuthService {
       this.emit()
       throw new Error('Cloud backend not configured. Set VITE_API_BASE_URL to enable sign-in.')
     }
-    const redirect = encodeURIComponent(`${PROTOCOL}://auth/callback`)
+    // Embed a one-time nonce in the deep-link target. The backend round-trips it
+    // back in the callback URL, so we can reject any callback we didn't initiate
+    // (e.g. another local app or a web page firing tokenmaxxing://auth/callback).
+    this.pendingState = randomUUID()
+    const redirect = encodeURIComponent(`${PROTOCOL}://auth/callback?state=${this.pendingState}`)
     const url = `${base}/auth/${provider}?redirect_uri=${redirect}`
     this.state = { status: 'pending', user: null }
     this.emit()
@@ -65,17 +83,36 @@ export class AuthService {
   handleCallbackUrl(url: string): void {
     try {
       const parsed = new URL(url)
-      if (parsed.host !== 'auth' && !parsed.pathname.includes('callback')) return
-      const frag = new URLSearchParams(parsed.hash.replace(/^#/, '') || parsed.search)
+      // Require the exact callback target (AND, not OR — the loose check let
+      // many unrelated URLs through).
+      if (parsed.host !== 'auth' || !parsed.pathname.includes('callback')) return
+
+      // Verify the nonce we issued in signIn(); reject forged/replayed callbacks.
+      const state = parsed.searchParams.get('state')
+      if (!this.pendingState || state !== this.pendingState) {
+        log.warn('rejected auth callback with missing/mismatched state')
+        return
+      }
+      this.pendingState = null
+
+      const frag = new URLSearchParams(parsed.hash.replace(/^#/, ''))
+      const token = frag.get('token')
+      if (!token) {
+        log.warn('auth callback missing token')
+        return
+      }
+      const rawProvider = frag.get('provider')
+      const provider: AuthProvider = PROVIDERS.includes(rawProvider as AuthProvider)
+        ? (rawProvider as AuthProvider)
+        : 'google'
       const user: AuthUser = {
         id: frag.get('id') ?? 'unknown',
         email: frag.get('email'),
         name: frag.get('name'),
         avatarUrl: frag.get('avatar'),
-        provider: (frag.get('provider') as AuthProvider) ?? 'google'
+        provider
       }
-      const token = frag.get('token')
-      if (token) this.store.meta.set('auth.token', token)
+      this.store.meta.set('auth.token', token)
       this.store.meta.set(META_KEY, JSON.stringify(user))
       this.state = { status: 'signed-in', user }
       this.emit()
@@ -86,14 +123,28 @@ export class AuthService {
   }
 
   signOut(): AuthState {
-    this.store.meta.set(META_KEY, '')
-    this.store.meta.set('auth.token', '')
+    this.pendingState = null
     // Privacy: wipe ALL locally-stored usage data (sessions, metrics, scan
-    // checkpoints, daily rollups) on logout — leave nothing behind.
+    // checkpoints, daily rollups) on logout — leave nothing behind. clearAll()
+    // also drops the settings + meta rows, so preserve the user's preferences
+    // (theme, enabled tools, privacy choices) and restore them afterward.
+    const settings = this.store.settings.get()
     try {
       this.store.clearAll()
     } catch {
       /* ignore */
+    }
+    if (settings) {
+      // Reset the leaderboard identity (handle + country) and cloud opt-in so the
+      // next sign-in — possibly a DIFFERENT account on this machine — starts clean
+      // and adopts its own name rather than inheriting the previous user's. Keep
+      // all other preferences (theme, enabled tools, scan frequency).
+      this.store.settings.save({
+        ...settings,
+        handle: DEFAULT_SETTINGS.handle,
+        countryCode: null,
+        privacy: DEFAULT_SETTINGS.privacy
+      })
     }
     this.state = { status: 'signed-out', user: null }
     this.emit()

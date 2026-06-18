@@ -114,6 +114,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           const cc = app.getLocaleCountryCode?.()
           if (cc && /^[A-Z]{2}$/.test(cc)) patch.countryCode = cc
         }
+        // Signing into a cloud account IS the opt-in to the leaderboard, so turn
+        // cloud sync + ranking participation on. Only aggregated metrics (no code
+        // or prompts) are ever sent, and the user can disable this in Settings.
+        if (!s.privacy.cloudSyncEnabled || !s.privacy.rankingParticipation) {
+          patch.privacy = { ...s.privacy, cloudSyncEnabled: true, rankingParticipation: true }
+        }
         if (Object.keys(patch).length) svc.settings.update(svc.store, patch)
       } catch {
         /* ignore */

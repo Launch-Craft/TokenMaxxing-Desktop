@@ -99,7 +99,13 @@ export function ShippingGlobe({
         const dist = geoDistance([country.lng, country.lat], center)
         return xy ? { country, x: xy[0], y: xy[1], dist } : null
       })
-      .filter((m): m is { country: CountryShipping; x: number; y: number; dist: number } => m !== null)
+      // Front hemisphere only. clipAngle(90) clips the *path* rendering but not raw
+      // point projection, so without this back-side countries (dist > 90°) leak
+      // onto the limb as stray dots.
+      .filter(
+        (m): m is { country: CountryShipping; x: number; y: number; dist: number } =>
+          m !== null && m.dist < Math.PI / 2
+      )
       .sort((a, b) => b.dist - a.dist) // back-to-front
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countries, lon0, tilt, R, c])

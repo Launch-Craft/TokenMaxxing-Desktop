@@ -31,6 +31,21 @@ export class SyncService {
     return h
   }
 
+  /** fetch() with a hard timeout so a hung backend can't leave a request pending forever. */
+  private async fetchWithTimeout(
+    url: string,
+    init: RequestInit = {},
+    ms = 15_000
+  ): Promise<Response> {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ms)
+    try {
+      return await fetch(url, { ...init, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   async uploadRankingMetrics(
     payload: RankingUploadPayload,
     settings: Settings,
@@ -42,7 +57,7 @@ export class SyncService {
       log.debug('no API base url configured; skipping upload')
       return
     }
-    const res = await fetch(`${this.baseUrl}/v1/rankings/metrics`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/rankings/metrics`, {
       method: 'POST',
       headers: this.headers(token),
       body: JSON.stringify({
@@ -61,7 +76,7 @@ export class SyncService {
     if (!this.baseUrl) return null
     const params = new URLSearchParams({ handle: settings.handle })
     if (settings.countryCode) params.set('country', settings.countryCode)
-    const res = await fetch(`${this.baseUrl}/v1/rankings?${params.toString()}`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/rankings?${params.toString()}`, {
       headers: this.headers(token)
     })
     if (!res.ok) throw new Error(`fetch failed: ${res.status}`)
@@ -79,7 +94,7 @@ export class SyncService {
     token: string | null = null
   ): Promise<CountryShipping[]> {
     if (!this.baseUrl) return []
-    const res = await fetch(`${this.baseUrl}/v1/rankings/countries`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/rankings/countries`, {
       headers: this.headers(token)
     })
     if (!res.ok) throw new Error(`countries fetch failed: ${res.status}`)
@@ -107,7 +122,7 @@ export class SyncService {
 
   async deleteCloudData(settings: Settings, token: string | null = null): Promise<void> {
     if (!this.baseUrl) return
-    await fetch(`${this.baseUrl}/v1/account/data`, {
+    await this.fetchWithTimeout(`${this.baseUrl}/v1/account/data`, {
       method: 'DELETE',
       headers: this.headers(token)
     }).catch((err) => log.warn('cloud delete failed', err))

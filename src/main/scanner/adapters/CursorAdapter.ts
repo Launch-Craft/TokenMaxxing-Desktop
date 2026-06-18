@@ -1,7 +1,13 @@
 import { join } from 'node:path'
 import type { Session } from '@shared/types'
 import { ToolAdapter, type ScanContext, type SourceRef } from './ToolAdapter'
-import { pathExists, safeStat, sessionizeByGap, type RawEvent } from '../aggregate'
+import {
+  normalizeEpochMs,
+  pathExists,
+  safeStat,
+  sessionizeByGap,
+  type RawEvent
+} from '../aggregate'
 import { estimateTokensFromAiLines } from '../tokenEstimation'
 import { openSqliteReadonly, type ReadonlyDb } from '../sqliteRead'
 
@@ -108,12 +114,19 @@ export class CursorAdapter extends ToolAdapter {
         'SELECT createdAt, timestamp, model FROM ai_code_hashes ORDER BY createdAt ASC LIMIT 50000'
       )
       if (rows.length === 0) return []
-      const events: RawEvent[] = rows.map((r) => ({
-        timestamp: new Date(Number(r.timestamp ?? r.createdAt)),
-        projectName: 'cursor-workspace',
-        model: r.model ? String(r.model) : (models[0] ?? null),
-        output: estimateTokensFromAiLines(4)
-      }))
+      const events: RawEvent[] = []
+      for (const r of rows) {
+        // Columns may be epoch seconds OR ms; normalize and skip unparseable rows
+        // (a raw `new Date(Number(null))` would yield epoch 0 / Invalid Date).
+        const ms = normalizeEpochMs(Number(r.timestamp ?? r.createdAt))
+        if (ms === null) continue
+        events.push({
+          timestamp: new Date(ms),
+          projectName: 'cursor-workspace',
+          model: r.model ? String(r.model) : (models[0] ?? null),
+          output: estimateTokensFromAiLines(4)
+        })
+      }
       return sessionizeByGap(this.id, this.name, events, 45)
     } catch {
       return []

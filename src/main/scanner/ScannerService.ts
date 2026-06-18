@@ -110,7 +110,6 @@ export class ScannerService {
 
     const ctx: ScanContext = { home: home(), log, signal: this.abort.signal }
     const errors: ScanError[] = []
-    const newCheckpoints: ScanCheckpoint[] = []
     const removedKeys: string[] = []
     let parsed = 0
     let skipped = 0
@@ -121,16 +120,21 @@ export class ScannerService {
         const result = await adapter.scan(ctx, prior)
         if (result.note) errors.push({ toolId: adapter.id, message: result.note })
 
-        // Replace only the sessions of changed/new sources.
+        // Replace only the sessions of changed/new sources. Persist each
+        // source's checkpoint right after its sessions so a crash mid-scan can't
+        // leave the checkpoint table lagging the session table (the old code
+        // batched all checkpoints to the very end of the loop).
         const now = new Date().toISOString()
         for (const source of result.changedSources) {
           store.sessions.upsertForSource(source.key, source.sessions)
-          newCheckpoints.push({
-            sourceKey: source.key,
-            toolId: adapter.id,
-            fingerprint: source.fingerprint,
-            updatedAt: now
-          })
+          store.checkpoints.upsertMany([
+            {
+              sourceKey: source.key,
+              toolId: adapter.id,
+              fingerprint: source.fingerprint,
+              updatedAt: now
+            }
+          ])
         }
         parsed += result.changedSources.length
         skipped += result.unchangedKeys.length
@@ -151,7 +155,6 @@ export class ScannerService {
         store.sessions.deleteForSources(removedKeys)
         store.checkpoints.deleteForKeys(removedKeys)
       }
-      if (newCheckpoints.length) store.checkpoints.upsertMany(newCheckpoints)
 
       // Recompute derived data from the full (mostly cached) session set.
       const allSessions = store.sessions.all()

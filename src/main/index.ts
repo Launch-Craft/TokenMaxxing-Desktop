@@ -94,6 +94,8 @@ if (!gotLock) {
     tray = new TrayController(svc, {
       showWindow: () => ensureWindow(),
       runScan: async () => {
+        // Never scan while signed out — keeps logged-out state data-free.
+        if (svc.auth.getState().status !== 'signed-in') return
         await svc.scanner.run(svc.settings.get(svc.store), svc.store)
         svc.achievements.evaluate(svc.store)
       }

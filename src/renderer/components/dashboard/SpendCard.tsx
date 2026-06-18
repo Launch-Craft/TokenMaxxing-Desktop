@@ -16,7 +16,8 @@ export function SpendCard({
   modelCosts: ModelCost[]
 }): JSX.Element {
   const topModels = modelCosts.slice(0, 4)
-  const maxCost = topModels[0]?.costUsd ?? 1
+  // Math.max(1, …) guards a top model with exactly 0 cost (0/0 = NaN width).
+  const maxCost = Math.max(1, topModels[0]?.costUsd ?? 0)
 
   return (
     <motion.div

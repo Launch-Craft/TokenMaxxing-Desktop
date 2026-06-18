@@ -44,18 +44,27 @@ export abstract class LogDirectoryAdapter extends ToolAdapter {
   protected async enumerate(ctx: ScanContext): Promise<SourceRef[]> {
     const cfg = this.config(ctx)
     const maxFileBytes = cfg.maxFileBytes ?? 25 * 1024 * 1024
+    const MAX_REFS = 20000
     const refs: SourceRef[] = []
+    let truncated = false
     for (const root of cfg.roots) {
-      if (ctx.signal?.aborted) break
+      if (ctx.signal?.aborted || refs.length >= MAX_REFS) break
       if (!(await pathExists(root))) continue
       const files = await walk(root, { match: cfg.filePattern, maxDepth: cfg.maxDepth ?? 4 })
       for (const file of files) {
-        if (refs.length > 20000) break
+        // Global cap (the old `break` only exited the inner loop, so later roots
+        // kept adding past the limit).
+        if (refs.length >= MAX_REFS) {
+          truncated = true
+          break
+        }
         const stat = await safeStat(file)
         if (!stat || stat.size === 0 || stat.size > maxFileBytes) continue
         refs.push({ key: file, fingerprint: `${stat.size}:${stat.mtime.getTime()}` })
       }
+      if (truncated) break
     }
+    if (truncated) ctx.log.warn(`${this.id}: enumeration truncated at ${MAX_REFS} files`)
     return refs
   }
 

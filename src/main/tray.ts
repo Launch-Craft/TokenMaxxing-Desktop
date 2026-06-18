@@ -1,4 +1,5 @@
 import { Menu, Tray, nativeImage } from 'electron'
+import { APP_NAME } from '@shared/constants'
 import type { Services } from './services/createServices'
 import { createLogger } from './utils/logger'
 
@@ -30,6 +31,7 @@ export interface TrayActions {
 export class TrayController {
   private tray: Tray | null = null
   private timer: NodeJS.Timeout | null = null
+  private unsubscribeAuth: (() => void) | null = null
 
   constructor(
     private services: Services,
@@ -46,12 +48,32 @@ export class TrayController {
     this.services.scanner.onProgress((p) => {
       if (p.status === 'success') this.refresh()
     })
+    // Refresh immediately on sign-in/sign-out so the menu never shows usage data
+    // (or a "Scan now" action) to a signed-out user.
+    this.unsubscribeAuth = this.services.auth.subscribe(() => this.refresh())
     this.timer = setInterval(() => this.refresh(), 60_000)
     log.info('menu-bar tray initialized')
   }
 
   refresh(): void {
     if (!this.tray) return
+
+    // Mirror the renderer's AuthGate: a signed-out user sees no usage data and
+    // no scan action — just a prompt to sign in.
+    if (this.services.auth.getState().status !== 'signed-in') {
+      this.tray.setTitle(APP_NAME)
+      this.tray.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: 'Sign in to see your usage', enabled: false },
+          { type: 'separator' },
+          { label: 'Sign in…', click: () => this.actions.showWindow() },
+          { type: 'separator' },
+          { label: 'Quit TokenMaxxing', role: 'quit' }
+        ])
+      )
+      return
+    }
+
     let tokensToday = 0
     let rank: number | null = null
     let spendToday = 0
@@ -88,6 +110,7 @@ export class TrayController {
 
   destroy(): void {
     if (this.timer) clearInterval(this.timer)
+    this.unsubscribeAuth?.()
     this.tray?.destroy()
     this.tray = null
   }

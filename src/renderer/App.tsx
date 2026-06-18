@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGate } from '@/components/auth/AuthGate'
+import { FirstRunLoader } from '@/components/common/FirstRunLoader'
 import { useAppStore } from '@/stores/useAppStore'
 import { useSettingsStore } from '@/stores/useSettingsStore'
 import { useMetricsStore } from '@/stores/useMetricsStore'
@@ -18,6 +19,7 @@ import Wrapped from '@/pages/Wrapped'
 
 export default function App(): JSX.Element {
   const authStatus = useAuthStore((s) => s.auth.status)
+  const hasData = useMetricsStore((s) => (s.snapshot?.stats.totalTokens ?? 0) > 0)
 
   useEffect(() => {
     // Bootstrap: load everything the app needs once, then keep live.
@@ -42,9 +44,17 @@ export default function App(): JSX.Element {
     return useRankingsStore.getState().startPolling()
   }, [authStatus])
 
+  // When the first scan produces data (e.g. right after signing in on a freshly
+  // cleared machine), push it to the cloud immediately so the user lands on the
+  // leaderboard in seconds instead of waiting for the next 60s poll.
+  useEffect(() => {
+    if (authStatus === 'signed-in' && hasData) void useRankingsStore.getState().refresh()
+  }, [authStatus, hasData])
+
   return (
     <TooltipProvider delayDuration={150}>
       <AuthGate>
+        <FirstRunLoader />
         <AppShell>
           <Routes>
             <Route path="/" element={<Dashboard />} />

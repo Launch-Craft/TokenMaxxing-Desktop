@@ -10,6 +10,7 @@ export function formatCompact(n: number): string {
 }
 
 export function formatNumber(n: number): string {
+  if (!Number.isFinite(n)) return '0'
   return FULL.format(Math.round(n))
 }
 
@@ -25,12 +26,16 @@ const MONEY_COMPACT = new Intl.NumberFormat('en', {
   maximumFractionDigits: 1
 })
 
-/** $1,240 → "$1.2K", $9.40 → "$9.40". */
+/** $1,240 → "$1.2K", $9.40 → "$9.40", -$1,500 → "-$1.5K". */
 export function formatMoney(usd: number): string {
   if (!Number.isFinite(usd)) return '$0'
-  if (usd > 0 && usd < 1) return `$${usd.toFixed(2)}`
-  if (usd < 1000) return `$${usd.toFixed(usd < 100 ? 2 : 0)}`
-  return MONEY_COMPACT.format(usd)
+  // Format the magnitude, then re-apply the sign so negatives don't render as
+  // "$-1500.00".
+  const sign = usd < 0 ? '-' : ''
+  const abs = Math.abs(usd)
+  if (abs > 0 && abs < 1) return `${sign}$${abs.toFixed(2)}`
+  if (abs < 1000) return `${sign}$${abs.toFixed(abs < 100 ? 2 : 0)}`
+  return `${sign}${MONEY_COMPACT.format(abs)}`
 }
 
 export function formatMoneyFull(usd: number): string {
@@ -38,12 +43,14 @@ export function formatMoneyFull(usd: number): string {
 }
 
 export function formatHours(h: number): string {
+  if (!Number.isFinite(h) || h <= 0) return '0m'
   if (h < 1) return `${Math.round(h * 60)}m`
   if (h < 10) return `${h.toFixed(1)}h`
   return `${Math.round(h)}h`
 }
 
 export function formatDuration(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0m'
   if (minutes < 60) return `${Math.round(minutes)}m`
   const h = Math.floor(minutes / 60)
   const m = Math.round(minutes % 60)
@@ -66,6 +73,9 @@ export function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return '—'
   const diff = Date.now() - then
+  // A future timestamp (clock skew / in-progress session) shouldn't read as a
+  // stale "Jun 4"; treat small skews as "just now" and larger ones as a date.
+  if (diff < 0) return diff > -60_000 ? 'just now' : formatDate(iso)
   const min = Math.floor(diff / 60_000)
   if (min < 1) return 'just now'
   if (min < 60) return `${min}m ago`

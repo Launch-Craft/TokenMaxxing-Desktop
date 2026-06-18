@@ -1,17 +1,15 @@
 import type {
+  CountryShipping,
   RankCard,
+  RankingLeaderboardEntry,
   RankingSnapshot,
   RankingUploadPayload,
   Settings,
   ToolId
 } from '@shared/types'
 import { TOOL_META } from '@shared/constants'
-import {
-  estimatePercentile,
-  percentileToRank,
-  synthesizeCountryShipping,
-  synthesizeLeaderboard
-} from '@shared/ranking'
+import { estimatePercentile, percentileToRank } from '@shared/ranking'
+import { countryGeo } from '@shared/geo'
 import type { DataStore } from '../db'
 import { createLogger } from '../utils/logger'
 import { MetricsService } from './MetricsService'
@@ -95,13 +93,19 @@ export class RankingService {
     const topTool = this.topTool(totals.toolTotals)
     const percentile = totalTokens > 0 ? estimatePercentile(totalTokens) : null
 
-    // Cloud path: when signed in (token present) and a backend is configured, use
-    // REAL data — upload the user's aggregated metrics so they appear, then read
-    // the live leaderboard + country rollups. Falls back to a local estimate only
-    // if the backend is unreachable.
-    if (token && this.sync && this.sync.hasBackend()) {
+    // Cloud path: ONLY when the user has opted into cloud rankings (master switch
+    // + ranking participation) AND is signed in AND a backend is configured. This
+    // honors the privacy-first promise — nothing (not even the handle in a fetch
+    // query) leaves the machine unless cloud sync is explicitly enabled. Uses REAL
+    // data: upload the user's aggregated metrics so they appear, then read the live
+    // leaderboard + country rollups. Falls back to a local estimate if unreachable.
+    if (token && this.participating(settings) && this.sync && this.sync.hasBackend()) {
       try {
-        if (forceRemote) {
+        // Only upload when there's actual data. Right after sign-out wipes local
+        // data, a fresh sign-in would otherwise upload an all-zero payload, which
+        // the daily-leaderboard filter (daily_tokens > 0) hides — and worse, it
+        // would overwrite any real cloud data this account already had with 0.
+        if (forceRemote && totalTokens > 0) {
           await this.sync.uploadRankingMetrics(this.buildPayload(store), settings, token)
         }
         const remote = await this.sync.fetchRankings(settings, token)
@@ -159,28 +163,46 @@ export class RankingService {
       })
     }
 
-    const leaderboard =
-      globalRank !== null
-        ? synthesizeLeaderboard(
+    // Estimate path shows ONLY the user's own data — never fabricated competitors
+    // or a fake country distribution (that read as real "global" data and was
+    // misleading). The rank cards above are the user's own numbers projected onto
+    // a percentile curve and are clearly labeled "Estimated" in the UI.
+    const leaderboard: RankingLeaderboardEntry[] =
+      totalTokens > 0
+        ? [
             {
-              totalTokens,
+              rank: 1,
+              handle: settings.handle,
+              country: settings.countryCode ?? null,
+              totalTokens: Math.round(totalTokens),
               codingHours: totals.totalCodingHours,
               topTool,
-              handle: settings.handle
-            },
-            Math.min(globalRank, 8)
-          )
+              isYou: true
+            }
+          ]
         : []
+
+    const countries: CountryShipping[] = []
+    if (settings.countryCode && totalTokens > 0) {
+      const geo = countryGeo(settings.countryCode)
+      countries.push({
+        countryCode: geo.code,
+        countryName: geo.name,
+        flag: geo.flag,
+        lat: geo.lat,
+        lng: geo.lng,
+        totalTokens: Math.round(totalTokens),
+        developers: 1,
+        share: 100,
+        isYou: true
+      })
+    }
 
     return {
       participating: this.participating(settings),
       cards,
       leaderboard,
-      countries: synthesizeCountryShipping({
-        totalTokens,
-        yourCountry: settings.countryCode,
-        count: 24
-      }),
+      countries,
       updatedAt: new Date().toISOString(),
       estimated: true
     }

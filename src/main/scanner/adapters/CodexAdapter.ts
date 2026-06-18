@@ -3,7 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { Session } from '@shared/types'
 import { ToolAdapter, type ScanContext, type SourceRef } from './ToolAdapter'
-import { hashId, pathExists, safeStat, walk } from '../aggregate'
+import { hashId, normalizeEpochMs, pathExists, safeStat, walk } from '../aggregate'
 import { estimateTokensFromBytes, finalizeBreakdown } from '../tokenEstimation'
 
 interface Usage {
@@ -178,7 +178,7 @@ export class CodexAdapter extends ToolAdapter {
         const t = Date.parse(v)
         if (!Number.isNaN(t)) return t
       }
-      if (typeof v === 'number' && v > 0) return v < 1e12 ? v * 1000 : v
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) return normalizeEpochMs(v)
     }
     return null
   }

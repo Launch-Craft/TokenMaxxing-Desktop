@@ -25,6 +25,11 @@ export class WrappedService {
   }
 
   generate(store: DataStore, year: number): WrappedReport {
+    // Guard against a non-numeric/NaN year (it crosses the IPC boundary via
+    // Number()); fall back to the current year rather than emitting a zeroed report.
+    if (!Number.isInteger(year) || year < 2000 || year > 9999) {
+      year = new Date().getFullYear()
+    }
     const sessions = store.sessions.all().filter((s) => new Date(s.startedAt).getFullYear() === year)
     const daily = store.daily.all().filter((d) => d.date.startsWith(String(year)))
     const prevDaily = store.daily.all().filter((d) => d.date.startsWith(String(year - 1)))

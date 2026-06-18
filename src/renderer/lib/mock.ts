@@ -363,7 +363,7 @@ export function mockRankings(): RankingSnapshot {
     ],
     leaderboard: synthesizeLeaderboard(
       { totalTokens: snap.stats.totalTokens, codingHours: 420, topTool: 'claude-code', handle: 'you' },
-      6
+      Math.min(rank, 8)
     ),
     countries: synthesizeCountryShipping({
       totalTokens: snap.stats.totalTokens,

@@ -18,6 +18,20 @@ export function hashId(...parts: (string | number)[]): string {
   return createHash('sha1').update(parts.join('::')).digest('hex').slice(0, 16)
 }
 
+/**
+ * Normalize a numeric epoch timestamp to milliseconds, inferring the unit from
+ * magnitude (seconds / ms / microseconds / nanoseconds). Returns null for
+ * non-finite or non-positive input. Tools log timestamps in all four units, and
+ * the old `v < 1e12 ? v*1000 : v` check mangled µs/ns into year-33000 dates.
+ */
+export function normalizeEpochMs(v: number): number | null {
+  if (!Number.isFinite(v) || v <= 0) return null
+  if (v >= 1e18) return v / 1e6 // nanoseconds
+  if (v >= 1e15) return v / 1e3 // microseconds
+  if (v >= 1e12) return v // milliseconds
+  return v * 1e3 // seconds
+}
+
 // ── Filesystem (best-effort, never throws) ──────────────────────────────────
 
 export async function pathExists(p: string): Promise<boolean> {
@@ -117,7 +131,8 @@ export function aggregateSessions(
     activeMinutes += s.durationMinutes
     projects.add(s.projectName)
     if (s.model) models.add(s.model)
-    lastActive = Math.max(lastActive, new Date(s.endedAt).getTime())
+    const end = new Date(s.endedAt).getTime()
+    if (!Number.isNaN(end)) lastActive = Math.max(lastActive, end)
   }
   return {
     toolId,
@@ -179,8 +194,13 @@ export function sessionizeByGap(
   events: RawEvent[],
   gapMinutes = 30
 ): Session[] {
-  if (events.length === 0) return []
-  const sorted = [...events].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+  // Drop events with an invalid timestamp: a single bad Date would make
+  // start.toISOString() throw and discard the entire tool's sessions.
+  const valid = events.filter(
+    (e) => e.timestamp instanceof Date && !Number.isNaN(e.timestamp.getTime())
+  )
+  if (valid.length === 0) return []
+  const sorted = [...valid].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
   const gapMs = gapMinutes * 60_000
   const sessions: Session[] = []
 
