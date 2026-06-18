@@ -1,13 +1,14 @@
 name: Release desktop app
 
-# Push a version tag (e.g. v0.1.0) → builds the macOS app and publishes it to a
-# GitHub Release with the .dmg/.zip attached. Also runnable manually.
+# Releases automatically when you push to main — but only when the version in
+# package.json doesn't already have a release. So: bump the version → push →
+# new release; ordinary commits at the same version are a no-op.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
 
-# Lets the built-in GITHUB_TOKEN create/update the GitHub Release.
+# Lets the built-in GITHUB_TOKEN create the GitHub Release + tag.
 permissions:
   contents: write
 
@@ -17,30 +18,48 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags to detect an existing release
+
+      - name: Resolve version tag
+        id: v
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if this version is already released
+        id: guard
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.v.outputs.tag }}" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release ${{ steps.v.outputs.tag }} already exists — bump the version in package.json to publish a new one."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
+        if: steps.guard.outputs.exists == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      # Best-effort: Python 3.12 dropped distutils, which some native builds need.
       - name: Python build deps
+        if: steps.guard.outputs.exists == 'false'
         run: python3 -m pip install --break-system-packages setuptools || true
 
       - name: Install dependencies
+        if: steps.guard.outputs.exists == 'false'
         run: npm ci
 
       - name: Typecheck
+        if: steps.guard.outputs.exists == 'false'
         run: npm run typecheck
 
       - name: Build bundles
+        if: steps.guard.outputs.exists == 'false'
         run: npm run build
 
-      # electron-builder reads the `publish` block in electron-builder.yml
-      # (owner: Launch-Craft, repo: TokenMaxxing-Desktop) and uploads the
-      # installers to the GitHub Release. `--publish always` does the upload.
       - name: Package & publish to GitHub Releases
+        if: steps.guard.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false' # skip code signing (no Apple cert)
