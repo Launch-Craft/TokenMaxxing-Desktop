@@ -88,9 +88,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   handle(IPC.achievementsGet, () => svc.achievements.evaluate(svc.store))
 
   // ── Rankings ─────────────────────────────────────────────────────────────────
-  handle(IPC.rankingsGet, () => svc.rankings.get(svc.store, svc.settings.get(svc.store)))
+  handle(IPC.rankingsGet, () =>
+    svc.rankings.get(svc.store, svc.settings.get(svc.store), svc.auth.token())
+  )
   handle(IPC.rankingsRefresh, () =>
-    svc.rankings.refresh(svc.store, svc.settings.get(svc.store))
+    svc.rankings.refresh(svc.store, svc.settings.get(svc.store), svc.auth.token())
   )
 
   // ── Wrapped ──────────────────────────────────────────────────────────────────
@@ -98,7 +100,27 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   handle(IPC.wrappedYears, () => svc.wrapped.listYears(svc.store))
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
-  svc.auth.setOnChange((state) => getWindow()?.webContents.send(IPC.authChanged, state))
+  svc.auth.setOnChange((state) => {
+    // On sign-in, adopt the user's real name as the leaderboard handle (and OS
+    // country if unset) so the board shows their name, not "anonymous-dev".
+    if (state.status === 'signed-in' && state.user) {
+      try {
+        const s = svc.settings.get(svc.store)
+        const patch: Partial<Settings> = {}
+        if (state.user.name && (!s.handle || s.handle === 'anonymous-dev')) {
+          patch.handle = state.user.name
+        }
+        if (!s.countryCode) {
+          const cc = app.getLocaleCountryCode?.()
+          if (cc && /^[A-Z]{2}$/.test(cc)) patch.countryCode = cc
+        }
+        if (Object.keys(patch).length) svc.settings.update(svc.store, patch)
+      } catch {
+        /* ignore */
+      }
+    }
+    getWindow()?.webContents.send(IPC.authChanged, state)
+  })
   handle(IPC.authState, () => svc.auth.getState())
   handle(IPC.authSignIn, (provider) => svc.auth.signIn(provider as AuthProvider))
   handle(IPC.authSignOut, () => svc.auth.signOut())

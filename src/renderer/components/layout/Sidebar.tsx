@@ -1,12 +1,10 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LogOut, RefreshCw } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { NAV_ITEMS, SECONDARY_NAV, type NavItem } from './nav'
 import { cn } from '@/lib/utils'
-import { useScannerStore } from '@/stores/useScannerStore'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useAppStore } from '@/stores/useAppStore'
-import { Button } from '@/components/ui/button'
 import logoUrl from '@/assets/logo.png'
 
 function NavRow({ item }: { item: NavItem }): JSX.Element {
@@ -39,7 +37,6 @@ function NavRow({ item }: { item: NavItem }): JSX.Element {
 }
 
 export function Sidebar(): JSX.Element {
-  const { running, progress, runScan } = useScannerStore()
   const user = useAuthStore((s) => s.auth.user)
   const signOut = useAuthStore((s) => s.signOut)
   const isMac = useAppStore((s) => s.isMac)
@@ -77,38 +74,16 @@ export function Sidebar(): JSX.Element {
       </nav>
 
       <div className="mt-auto flex flex-col gap-3">
-        {/* Scan control */}
-        <div className="no-drag rounded-xl border border-white/5 bg-white/[0.02] p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              {running ? 'Scanning' : 'Local scan'}
-            </span>
-            {running && (
-              <span className="text-[10px] text-muted-foreground tabular">
-                {progress.completed}/{progress.total || '—'}
-              </span>
-            )}
-          </div>
-          <Button
-            size="sm"
-            variant={running ? 'secondary' : 'default'}
-            className="w-full"
-            disabled={running}
-            onClick={() => void runScan()}
-          >
-            <RefreshCw className={cn('h-3.5 w-3.5', running && 'animate-spin')} />
-            {running ? 'Scanning…' : 'Scan now'}
-          </Button>
-          {running && (
-            <p className="mt-2 truncate text-[10px] text-muted-foreground">{progress.message}</p>
-          )}
-        </div>
-
-        {/* Account chip */}
+        {/* Account chip — scanning is automatic (every 10s) so there's no manual button. */}
         <div className="no-drag flex items-center gap-2.5 rounded-xl px-2 py-1.5">
           <div className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-white/10 text-[11px] font-semibold">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+              <img
+                src={user.avatarUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="h-full w-full object-cover"
+              />
             ) : (
               (user?.name ?? 'Local').slice(0, 1).toUpperCase()
             )}

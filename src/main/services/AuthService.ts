@@ -88,6 +88,13 @@ export class AuthService {
   signOut(): AuthState {
     this.store.meta.set(META_KEY, '')
     this.store.meta.set('auth.token', '')
+    // Privacy: wipe ALL locally-stored usage data (sessions, metrics, scan
+    // checkpoints, daily rollups) on logout — leave nothing behind.
+    try {
+      this.store.clearAll()
+    } catch {
+      /* ignore */
+    }
     this.state = { status: 'signed-out', user: null }
     this.emit()
     return this.state

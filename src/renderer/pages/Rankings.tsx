@@ -12,7 +12,6 @@ import { ToolBadge } from '@/components/common/ToolBadge'
 import { ShippingGlobe } from '@/components/rankings/ShippingGlobe'
 import { CountryLeaderboard } from '@/components/rankings/CountryLeaderboard'
 import { useRankingsStore } from '@/stores/useRankingsStore'
-import { useSettingsStore } from '@/stores/useSettingsStore'
 import { cn } from '@/lib/utils'
 import { formatCompact, formatRank, ordinal, relativeTime } from '@/lib/format'
 
@@ -68,14 +67,14 @@ function RankCard({ card, index }: { card: RankCardType; index: number }): JSX.E
 
 export default function Rankings(): JSX.Element {
   const { rankings, loading, refreshing, load, refresh } = useRankingsStore()
-  const { settings, update } = useSettingsStore()
   const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => {
     if (!rankings) void load()
   }, [rankings, load])
 
-  const participating = settings?.privacy.rankingParticipation && settings?.privacy.cloudSyncEnabled
+  // The snapshot itself says whether it's a local estimate or real cloud data.
+  const estimated = rankings?.estimated ?? false
   const countries = rankings?.countries ?? []
 
   return (
@@ -87,7 +86,7 @@ export default function Rankings(): JSX.Element {
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
               <Radio className="h-3.5 w-3.5 text-primary" />
-              Live · refreshes every 60s
+              Daily ranking · syncs every 5 min
               {rankings?.updatedAt && <span>· {relativeTime(rankings.updatedAt)}</span>}
             </span>
             <Button variant="secondary" size="sm" disabled={refreshing} onClick={() => void refresh()}>
@@ -98,35 +97,21 @@ export default function Rankings(): JSX.Element {
         }
       />
 
-      {!participating && (
-        <Card className="mb-5 flex items-center gap-4 border-primary/15 bg-primary/[0.04] p-4">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+      {estimated && (
+        <Card className="mb-5 flex items-center gap-4 border-amber-500/20 bg-amber-500/[0.04] p-4">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-400">
             <Shield className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">You're seeing a local estimate</p>
+            <p className="text-sm font-medium">Showing a local estimate</p>
             <p className="text-xs text-muted-foreground">
-              Rankings are computed on-device from your own numbers. Opt into the global leaderboard
-              to compare with real developers — only aggregated metrics are ever uploaded.
+              Couldn't reach the cloud leaderboard, so these numbers are computed on-device. Your real
+              rank appears once the connection is back.
             </p>
           </div>
-          <Button
-            size="sm"
-            onClick={() =>
-              void update({
-                privacy: {
-                  ...(settings?.privacy ?? {
-                    cloudSyncEnabled: false,
-                    rankingParticipation: false,
-                    shareAnonymousUsage: false
-                  }),
-                  cloudSyncEnabled: true,
-                  rankingParticipation: true
-                }
-              })
-            }
-          >
-            Join leaderboard
+          <Button variant="secondary" size="sm" disabled={refreshing} onClick={() => void refresh()}>
+            <RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
+            Retry
           </Button>
         </Card>
       )}
@@ -186,7 +171,7 @@ export default function Rankings(): JSX.Element {
         <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
           <Trophy className="h-4 w-4 text-viz-amber" />
           <h3 className="text-sm font-semibold">Global Leaderboard</h3>
-          {!participating && (
+          {estimated && (
             <Badge variant="secondary" className="ml-2">
               Estimated
             </Badge>

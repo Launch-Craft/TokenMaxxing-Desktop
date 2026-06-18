@@ -65,6 +65,27 @@ if (!gotLock) {
     }
 
     const svc = createServices()
+
+    // Default the user's country from the OS region (e.g. "IN") when unset, so the
+    // leaderboard + globe can place them without precise geolocation. Also adopt
+    // the signed-in user's real name as the leaderboard handle.
+    try {
+      const s = svc.settings.get(svc.store)
+      const patch: Record<string, unknown> = {}
+      if (!s.countryCode) {
+        const cc = app.getLocaleCountryCode?.()
+        if (cc && /^[A-Z]{2}$/.test(cc)) patch.countryCode = cc
+      }
+      const user = svc.auth.getState().user
+      if (user?.name && (!s.handle || s.handle === 'anonymous-dev')) patch.handle = user.name
+      if (Object.keys(patch).length) svc.settings.update(svc.store, patch)
+    } catch {
+      /* ignore */
+    }
+
+    // Only scan locally while signed in (logout clears + stops accumulation).
+    svc.live.setActiveCheck(() => svc.auth.getState().status === 'signed-in')
+
     mainWindow = createWindow()
     registerIpc(() => mainWindow)
 
@@ -78,8 +99,8 @@ if (!gotLock) {
     })
     tray.init()
 
-    // Auto-scan on launch if configured, then start the continuous 2s analysis
-    // loop (incremental — warm passes are near no-ops).
+    // Auto-scan on launch if configured, then start the continuous local-analysis
+    // loop (every 10s, incremental — warm passes are near no-ops).
     void maybeAutoScan().finally(() => svc.live.start())
 
     app.on('activate', () => {
@@ -103,6 +124,8 @@ if (!gotLock) {
 async function maybeAutoScan(): Promise<void> {
   try {
     const svc = getServices()
+    // Only scan while signed in — keeps logged-out state data-free.
+    if (svc.auth.getState().status !== 'signed-in') return
     const settings = svc.settings.get(svc.store)
     const lastScan = svc.store.meta.get('lastScanAt')
     const shouldScan =

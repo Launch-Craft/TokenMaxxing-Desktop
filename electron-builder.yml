@@ -70,5 +70,5 @@ protocols:
 
 publish:
   provider: github
-  owner: acmediamarketing
-  repo: tokenmaxxing
+  owner: Launch-Craft
+  repo: TokenMaxxing-Desktop

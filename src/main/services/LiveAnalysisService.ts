@@ -25,6 +25,8 @@ export class LiveAnalysisService {
   private last: AnalysisTick | null = null
   private errorLogged = false
   private broadcast: Broadcast = () => {}
+  /** Only scan while this returns true (e.g. signed in). */
+  private isActive: () => boolean = () => true
 
   constructor(
     private scanner: ScannerService,
@@ -35,6 +37,10 @@ export class LiveAnalysisService {
 
   setBroadcast(fn: Broadcast): void {
     this.broadcast = fn
+  }
+
+  setActiveCheck(fn: () => boolean): void {
+    this.isActive = fn
   }
 
   getStatus(): AnalysisTick | null {
@@ -59,6 +65,7 @@ export class LiveAnalysisService {
 
   private async tick(): Promise<void> {
     if (this.ticking) return // coalesce: never overlap passes
+    if (!this.isActive()) return // only scan while signed in
     this.ticking = true
     try {
       const settings = this.settings.get(this.store)

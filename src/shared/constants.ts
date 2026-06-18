@@ -5,21 +5,17 @@ export const APP_TAGLINE = 'GitHub Contributions × Spotify Wrapped, for AI deve
 export const SETTINGS_VERSION = 1
 
 /**
- * Continuous local analysis cadence: once signed in, the main process runs an
- * INCREMENTAL scan every 2 seconds (warm passes are a no-op when nothing
- * changed, so this stays cheap — see ScannerService). RESOLVED value, do not
- * change without updating the post-login disclosure copy.
+ * Continuous local analysis cadence: while the app is open, the main process
+ * runs an INCREMENTAL scan of the local data every 10 seconds (warm passes are a
+ * near no-op when nothing changed — see ScannerService).
  */
-export const LIVE_ANALYSIS_INTERVAL_MS = 2000
+export const LIVE_ANALYSIS_INTERVAL_MS = 10_000
 
 /**
- * Server-side leaderboard recompute + client poll cadence. RESOLVED to 60s
- * (1 minute) over the 5-minute alternative: local analysis is every 2s, so a
- * per-minute board keeps the competitive feel without hammering the DB. The
- * backend may fall back to 300s (5 min) under load — see
- * backend/supabase/migrations/0002_leaderboard_snapshots.sql.
+ * Cloud sync cadence: how often the app uploads aggregated metrics to the backend
+ * and refreshes the leaderboard. Every 5 minutes.
  */
-export const LEADERBOARD_REFRESH_MS = 60_000
+export const LEADERBOARD_REFRESH_MS = 5 * 60_000
 
 /**
  * Static, presentation-level metadata for each tool. The runtime scan

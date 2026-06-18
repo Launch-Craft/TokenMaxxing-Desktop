@@ -20,6 +20,11 @@ export class SyncService {
     return process.env.VITE_API_BASE_URL || process.env.API_BASE_URL || null
   }
 
+  /** Whether a cloud backend URL is configured. */
+  hasBackend(): boolean {
+    return !!this.baseUrl
+  }
+
   private headers(token: string | null): Record<string, string> {
     const h: Record<string, string> = { 'content-type': 'application/json' }
     if (token) h.authorization = `Bearer ${token}`
@@ -31,10 +36,8 @@ export class SyncService {
     settings: Settings,
     token: string | null = null
   ): Promise<void> {
-    if (!settings.privacy.cloudSyncEnabled) {
-      log.debug('cloud sync disabled; skipping upload')
-      return
-    }
+    // The caller (RankingService) decides when to upload — typically when the
+    // user is signed in. We only need a configured backend here.
     if (!this.baseUrl) {
       log.debug('no API base url configured; skipping upload')
       return

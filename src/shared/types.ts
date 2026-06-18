@@ -354,6 +354,8 @@ export interface RankingSnapshot {
 /** Aggregated metrics uploaded for ranking (privacy-safe). */
 export interface RankingUploadPayload {
   totalTokens: number
+  /** Today's tokens (incl. cache) — drives the DAILY leaderboard ranking. */
+  dailyTokens: number
   monthlyTokens: number
   activeDays: number
   codingHours: number

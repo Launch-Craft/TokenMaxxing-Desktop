@@ -56,6 +56,9 @@ export class RankingService {
     const topTool = this.topTool(totals.toolTotals)
     return {
       totalTokens: totals.totalTokens,
+      // Today's tokens (incl. cache) — matches the dashboard "Tokens used" card and
+      // drives the DAILY leaderboard ranking.
+      dailyTokens: snapshot.stats.gross.today,
       monthlyTokens: snapshot.stats.tokensThisMonth,
       activeDays: store.daily.all().filter((d) => d.tokens > 0).length,
       codingHours: totals.totalCodingHours,
@@ -65,32 +68,46 @@ export class RankingService {
     }
   }
 
-  async get(store: DataStore, settings: Settings): Promise<RankingSnapshot> {
-    return this.compute(store, settings, false)
+  async get(
+    store: DataStore,
+    settings: Settings,
+    token: string | null = null
+  ): Promise<RankingSnapshot> {
+    return this.compute(store, settings, false, token)
   }
 
-  async refresh(store: DataStore, settings: Settings): Promise<RankingSnapshot> {
-    return this.compute(store, settings, true)
+  async refresh(
+    store: DataStore,
+    settings: Settings,
+    token: string | null = null
+  ): Promise<RankingSnapshot> {
+    return this.compute(store, settings, true, token)
   }
 
   private async compute(
     store: DataStore,
     settings: Settings,
-    forceRemote: boolean
+    forceRemote: boolean,
+    token: string | null = null
   ): Promise<RankingSnapshot> {
     const totals = this.metrics.derivedTotals(store)
     const totalTokens = totals.totalTokens
     const topTool = this.topTool(totals.toolTotals)
     const percentile = totalTokens > 0 ? estimatePercentile(totalTokens) : null
 
-    // Cloud path (only when the user has explicitly opted in).
-    if (this.participating(settings) && this.sync) {
+    // Cloud path: when signed in (token present) and a backend is configured, use
+    // REAL data — upload the user's aggregated metrics so they appear, then read
+    // the live leaderboard + country rollups. Falls back to a local estimate only
+    // if the backend is unreachable.
+    if (token && this.sync && this.sync.hasBackend()) {
       try {
-        if (forceRemote) await this.sync.uploadRankingMetrics(this.buildPayload(store), settings)
-        const remote = await this.sync.fetchRankings(settings)
+        if (forceRemote) {
+          await this.sync.uploadRankingMetrics(this.buildPayload(store), settings, token)
+        }
+        const remote = await this.sync.fetchRankings(settings, token)
         if (remote) {
           // Country rollups come from a separate endpoint (globe + country board).
-          const countries = await this.sync.fetchCountries(settings).catch(() => [])
+          const countries = await this.sync.fetchCountries(settings, token).catch(() => [])
           return {
             ...remote,
             countries: countries.length ? countries : (remote.countries ?? []),

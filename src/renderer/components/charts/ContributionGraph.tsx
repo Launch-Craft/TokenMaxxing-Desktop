@@ -94,68 +94,64 @@ export function ContributionGraph({ daily }: { daily: DailyUsage[] }): JSX.Eleme
           tokens/day
         </span>
       </div>
-      <div className="overflow-x-auto pb-1">
-        <div className="inline-flex flex-col gap-1.5">
-          {/* Month labels */}
-          <div className="relative ml-7 h-3" style={{ width: WEEKS * 14 }}>
-            {monthLabels.map((m, i) => (
-              <span
-                key={i}
-                className="absolute text-[10px] text-muted-foreground"
-                style={{ left: m.col * 14 }}
-              >
-                {m.label}
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-1.5">
-            {/* Weekday labels */}
-            <div className="flex w-6 flex-col gap-[3px] pt-[1px] text-[9px] text-muted-foreground">
-              {['', 'Mon', '', 'Wed', '', 'Fri', ''].map((d, i) => (
-                <span key={i} className="h-[11px] leading-[11px]">
-                  {d}
-                </span>
-              ))}
-            </div>
-            {/* Grid */}
-            <div className="flex gap-[3px]">
-              {columns.map((col, ci) => (
-                <div key={ci} className="flex flex-col gap-[3px]">
-                  {col.map((cell, ri) =>
-                    cell.inRange ? (
-                      <Tooltip key={ri}>
-                        <TooltipTrigger asChild>
-                          <div
-                            className="h-[11px] w-[11px] rounded-[3px] ring-1 ring-inset ring-white/[0.04] transition-transform hover:scale-125"
-                            style={levelStyle(cell.level, cell.inRange)}
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <span className="font-mono">{formatCompact(cell.tokens)}</span> tokens ·{' '}
-                          {formatDate(cell.date + 'T00:00:00')}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <div key={ri} className="h-[11px] w-[11px]" />
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Legend */}
-          <div className="ml-7 mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <span>Less</span>
-            {[0, 1, 2, 3, 4].map((l) => (
-              <div
-                key={l}
-                className="h-[11px] w-[11px] rounded-[3px]"
-                style={levelStyle(l as Cell['level'], true)}
-              />
-            ))}
-            <span>More</span>
-          </div>
+      {/* Month labels — positioned proportionally across the full-width grid */}
+      <div className="relative ml-7 mb-1 h-3">
+        {monthLabels.map((m, i) => (
+          <span
+            key={i}
+            className="absolute -translate-x-px text-[10px] text-muted-foreground"
+            style={{ left: `${(m.col / WEEKS) * 100}%` }}
+          >
+            {m.label}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-[3px]">
+        {/* Weekday labels */}
+        <div className="flex w-6 shrink-0 flex-col gap-[3px] text-[9px] text-muted-foreground">
+          {['', 'Mon', '', 'Wed', '', 'Fri', ''].map((d, i) => (
+            <span key={i} className="flex flex-1 items-center leading-none">
+              {d}
+            </span>
+          ))}
         </div>
+        {/* Grid — columns flex to fill the full card width, cells stay square */}
+        <div className="flex flex-1 gap-[3px]">
+          {columns.map((col, ci) => (
+            <div key={ci} className="flex flex-1 flex-col gap-[3px]">
+              {col.map((cell, ri) =>
+                cell.inRange ? (
+                  <Tooltip key={ri}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="aspect-square w-full rounded-[2px] ring-1 ring-inset ring-white/[0.04] transition-transform hover:scale-110"
+                        style={levelStyle(cell.level, cell.inRange)}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className="font-mono">{formatCompact(cell.tokens)}</span> tokens ·{' '}
+                      {formatDate(cell.date + 'T00:00:00')}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <div key={ri} className="aspect-square w-full" />
+                )
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="ml-7 mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <span>Less</span>
+        {[0, 1, 2, 3, 4].map((l) => (
+          <div
+            key={l}
+            className="h-[11px] w-[11px] rounded-[2px]"
+            style={levelStyle(l as Cell['level'], true)}
+          />
+        ))}
+        <span>More</span>
       </div>
     </div>
   )

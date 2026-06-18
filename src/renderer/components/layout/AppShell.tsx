@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { TitleBar } from './TitleBar'
-import { DisclosureBanner } from './DisclosureBanner'
 import { SessionDetail } from '@/components/dashboard/SessionDetail'
 
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
@@ -13,7 +12,6 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <TitleBar />
-        <DisclosureBanner />
         <main className="relative flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
