@@ -62,5 +62,15 @@ jobs:
         if: steps.guard.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false' # skip code signing (no Apple cert)
-        run: npx electron-builder --mac --publish always
+          # Code signing (Developer ID .p12 as base64). Empty → ad-hoc fallback.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Notarization creds (used by scripts/notarize.cjs).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # No cert secret → disable signing discovery so the build still works
+          # (afterPack ad-hoc signs it instead).
+          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; fi
+          npx electron-builder --mac --publish always

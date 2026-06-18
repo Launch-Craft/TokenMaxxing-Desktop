@@ -2,6 +2,11 @@ appId: com.acmediamarketing.tokenmaxxing
 productName: TokenMaxxing
 copyright: Copyright © 2026 Launchcraft Studio
 
+# Ad-hoc sign unsigned builds (no-op when a real cert is present), and notarize
+# Developer ID-signed builds when Apple creds are in the environment.
+afterPack: scripts/after-pack.cjs
+afterSign: scripts/notarize.cjs
+
 directories:
   buildResources: resources
   output: dist
