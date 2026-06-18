@@ -1,0 +1,121 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { app, BrowserWindow } from 'electron'
+import { createWindow } from './window'
+import { registerIpc } from './ipc'
+import { createServices, getServices } from './services/createServices'
+import { closeDataStore } from './db'
+import { TrayController } from './tray'
+import { createLogger } from './utils/logger'
+
+const log = createLogger('main')
+const PROTOCOL = process.env.VITE_APP_PROTOCOL || 'tokenmaxxing'
+
+let mainWindow: BrowserWindow | null = null
+let tray: TrayController | null = null
+
+function ensureWindow(): BrowserWindow {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    mainWindow = createWindow()
+  }
+  mainWindow.show()
+  mainWindow.focus()
+  return mainWindow
+}
+
+// Single-instance lock so OAuth deep links route to the running app.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  // Brand the app early so the menu/About show "TokenMaxxing" (not "Electron").
+  app.setName('TokenMaxxing')
+
+  // Register custom protocol for OAuth callbacks (tokenmaxxing://auth/callback).
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [process.argv[1]])
+  } else {
+    app.setAsDefaultProtocolClient(PROTOCOL)
+  }
+
+  app.on('second-instance', (_event, argv) => {
+    // Windows/Linux: deep link arrives as an argv entry.
+    const url = argv.find((a) => a.startsWith(`${PROTOCOL}://`))
+    if (url) getServices().auth.handleCallbackUrl(url)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+
+  // macOS: deep link arrives via open-url.
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    if (url.startsWith(`${PROTOCOL}://`)) getServices().auth.handleCallbackUrl(url)
+  })
+
+  app.whenReady().then(() => {
+    app.setName('TokenMaxxing')
+
+    // Dock icon. Packaged builds use the bundled .icns automatically; in dev we
+    // set it at runtime so the Dock shows the logo instead of the Electron atom.
+    if (process.platform === 'darwin' && !app.isPackaged && app.dock) {
+      const devIcon = join(process.cwd(), 'resources', 'icon.png')
+      if (existsSync(devIcon)) app.dock.setIcon(devIcon)
+    }
+
+    const svc = createServices()
+    mainWindow = createWindow()
+    registerIpc(() => mainWindow)
+
+    // macOS menu-bar presence: tokens + rank today, click for the menu.
+    tray = new TrayController(svc, {
+      showWindow: () => ensureWindow(),
+      runScan: async () => {
+        await svc.scanner.run(svc.settings.get(svc.store), svc.store)
+        svc.achievements.evaluate(svc.store)
+      }
+    })
+    tray.init()
+
+    // Auto-scan on launch if configured, then start the continuous 2s analysis
+    // loop (incremental — warm passes are near no-ops).
+    void maybeAutoScan().finally(() => svc.live.start())
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow()
+      }
+    })
+  })
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+
+  app.on('before-quit', () => {
+    getServices().live.stop()
+    tray?.destroy()
+    closeDataStore()
+  })
+}
+
+async function maybeAutoScan(): Promise<void> {
+  try {
+    const svc = getServices()
+    const settings = svc.settings.get(svc.store)
+    const lastScan = svc.store.meta.get('lastScanAt')
+    const shouldScan =
+      settings.autoScanOnLaunch &&
+      (settings.scanFrequency === 'startup' ||
+        settings.scanFrequency === 'hourly' ||
+        settings.scanFrequency === 'daily' ||
+        !lastScan)
+    if (!shouldScan) return
+    log.info('running auto-scan on launch…')
+    await svc.scanner.run(settings, svc.store)
+    svc.achievements.evaluate(svc.store)
+  } catch (err) {
+    log.error('auto-scan failed:', (err as Error).message)
+  }
+}

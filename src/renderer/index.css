@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* TokenMaxxing — monochrome "silver graphite" dark theme.
+       Neutral cool-grey surfaces, silver text, no color accents or gradients —
+       matched to the chrome app icon. Clean & flat (Wispr-Flow inspired). */
+    --background: 240 6% 5%;
+    --foreground: 0 0% 95%;
+
+    --card: 240 5% 8%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 240 6% 9%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Silver accent (used sparingly for primary actions). */
+    --primary: 0 0% 91%;
+    --primary-foreground: 240 6% 8%;
+
+    --secondary: 240 4% 13%;
+    --secondary-foreground: 0 0% 92%;
+
+    --muted: 240 4% 12%;
+    --muted-foreground: 240 5% 58%;
+
+    --accent: 240 4% 15%;
+    --accent-foreground: 0 0% 96%;
+
+    /* The one functional color: destructive actions (delete data). Muted. */
+    --destructive: 0 58% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5% 15%;
+    --input: 240 5% 15%;
+    --ring: 0 0% 55%;
+
+    --brand: 0 0% 88%;
+    --brand-foreground: 240 6% 8%;
+
+    /* Visualization ramp — distinct shades of silver/grey (no hue). */
+    --viz-green: 0 0% 92%;
+    --viz-cyan: 0 0% 80%;
+    --viz-violet: 0 0% 68%;
+    --viz-amber: 0 0% 58%;
+    --viz-rose: 0 0% 48%;
+    --viz-blue: 0 0% 40%;
+    --viz-orange: 0 0% 72%;
+    --viz-slate: 0 0% 52%;
+
+    --radius: 0.9rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+
+  /* Thin neutral scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(240 6% 28%);
+    background-clip: padding-box;
+  }
+
+  ::selection {
+    background: hsl(0 0% 100% / 0.16);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* Flat elevated surface — opaque card, hairline border, soft shadow. */
+  .glass {
+    background: hsl(var(--card));
+    border: 1px solid hsl(0 0% 100% / 0.06);
+    box-shadow:
+      inset 0 1px 0 0 hsl(0 0% 100% / 0.03),
+      0 1px 2px 0 hsl(0 0% 0% / 0.4);
+  }
+
+  .glass-hover {
+    transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+  }
+  .glass-hover:hover {
+    background: hsl(240 5% 10%);
+    border-color: hsl(0 0% 100% / 0.12);
+  }
+
+  /* Kept for API compatibility — now plain silver text, no gradient. */
+  .text-gradient {
+    color: hsl(var(--foreground));
+  }
+  .text-brand-gradient {
+    color: hsl(0 0% 98%);
+  }
+
+  /* Flat near-black app background. */
+  .bg-app {
+    background-color: hsl(var(--background));
+  }
+
+  /* No film grain — keep it clean & flat. */
+  .grain::after {
+    content: none;
+  }
+}
+
+@layer utilities {
+  .drag {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  }
+}
