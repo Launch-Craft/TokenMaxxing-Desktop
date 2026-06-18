@@ -7,6 +7,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sign:
+        description: 'Sign + notarize with Apple Developer ID (slow, ~20-30 min). Off = fast ad-hoc build.'
+        type: boolean
+        default: false
 
 # Lets the built-in GITHUB_TOKEN create the GitHub Release + tag.
 permissions:
@@ -15,6 +20,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest # Apple Silicon runner → arm64 build
+    timeout-minutes: 40 # bound runaway signing/notarization hangs (fast path is ~5 min)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,15 +68,25 @@ jobs:
         if: steps.guard.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing (Developer ID .p12 as base64). Empty → ad-hoc fallback.
+          # Apple signing + notarization is opt-in (slow: ~20-30 min on Apple's
+          # servers). Default builds take the fast ad-hoc path. Re-enable by
+          # running the workflow manually with sign=true.
+          SIGN: ${{ github.event.inputs.sign || 'false' }}
+          # Code signing (Developer ID .p12 as base64). Only used when SIGN=true.
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          # Notarization creds (used by scripts/notarize.cjs).
+          # Notarization creds (used by scripts/notarize.cjs). Only used when SIGN=true.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          DEBUG: '@electron/notarize*' # progress logs if notarization is ever enabled
         run: |
-          # No cert secret → disable signing discovery so the build still works
-          # (afterPack ad-hoc signs it instead).
-          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; fi
+          if [ "$SIGN" != "true" ]; then
+            # Fast path: strip the cert/Apple creds so electron-builder skips
+            # Developer ID signing and scripts/notarize.cjs skips Apple. afterPack
+            # ad-hoc signs instead (user gets a one-time right-click→Open prompt).
+            echo "Signing disabled → fast ad-hoc build. Run with sign=true to notarize."
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
           npx electron-builder --mac --publish always
