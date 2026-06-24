@@ -24,8 +24,9 @@ const log = createLogger('scanner')
  * so incremental caching never serves data computed by old logic.
  *   v2: exclude cache_read from token totals & cost.
  *   v3: tokens used = input + output only (exclude cache reads AND writes).
+ *   v4: capture agentic activity (tool calls, agents spawned, tool errors).
  */
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 
 export type ProgressListener = (p: ScanProgress) => void
 

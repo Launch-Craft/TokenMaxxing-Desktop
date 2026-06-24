@@ -15,12 +15,14 @@ import {
   Library,
   Moon,
   MousePointer2,
+  Network,
   Sparkles,
   Squirrel,
   Sunrise,
   TerminalSquare,
   Timer,
   Trophy,
+  Wrench,
   Zap,
   type LucideIcon
 } from 'lucide-react'
@@ -51,7 +53,9 @@ const ICONS: Record<string, LucideIcon> = {
   Compass,
   Boxes,
   FolderGit2,
-  Library
+  Library,
+  Network,
+  Wrench
 }
 
 export interface IconProps {

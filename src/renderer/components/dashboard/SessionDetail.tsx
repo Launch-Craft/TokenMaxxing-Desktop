@@ -90,6 +90,32 @@ export function SessionDetail(): JSX.Element | null {
           </div>
         </div>
 
+        {/* Agentic activity (only when the tool records tool calls) */}
+        {session.agentic && session.agentic.toolCalls > 0 && (
+          <div>
+            <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+              Agentic activity
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Fact label="Tool calls" value={formatNumber(session.agentic.toolCalls)} />
+              <Fact
+                label="Tool accuracy"
+                value={`${
+                  session.agentic.toolResults > 0
+                    ? (
+                        ((session.agentic.toolResults - session.agentic.toolErrors) /
+                          session.agentic.toolResults) *
+                        100
+                      ).toFixed(1)
+                    : '100'
+                }%`}
+              />
+              <Fact label="Agents spawned" value={formatNumber(session.agentic.agentsSpawned)} />
+              <Fact label="Workflows" value={formatNumber(session.agentic.workflows)} />
+            </div>
+          </div>
+        )}
+
         {/* Totals */}
         <div className="flex items-center justify-between border-t border-white/5 pt-3 text-sm">
           <div>

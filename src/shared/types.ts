@@ -60,6 +60,27 @@ export interface ToolMetrics {
   note?: string
 }
 
+/**
+ * Privacy-safe agentic-activity counts derived from a session's tool calls.
+ * NOTHING here is conversation content — only the NAMES of tools invoked, how
+ * many calls were made, and whether each result errored. Populated for tools
+ * whose logs record tool-call events (Claude Code today); undefined otherwise.
+ */
+export interface AgenticStats {
+  /** Total tool invocations (`tool_use` blocks). */
+  toolCalls: number
+  /** Total tool results returned (`tool_result` blocks). */
+  toolResults: number
+  /** Tool results flagged as errors (`tool_result.is_error`). */
+  toolErrors: number
+  /** Subagents spawned — `Agent` + `Task` tool calls. */
+  agentsSpawned: number
+  /** Multi-agent workflows launched — `Workflow` tool calls. */
+  workflows: number
+  /** Per-tool call counts keyed by tool name, e.g. `{ Bash: 12, Edit: 8 }`. */
+  byTool: Record<string, number>
+}
+
 /** One coding session derived from a tool's logs. */
 export interface Session {
   id: string
@@ -74,6 +95,8 @@ export interface Session {
   durationMinutes: number
   messageCount: number
   model: string | null
+  /** Agentic tool-call activity for this session (when the tool records it). */
+  agentic?: AgenticStats
   /**
    * Stable key of the source (log file / db) this session was derived from.
    * Used by incremental scans to replace only a changed source's sessions.
@@ -141,6 +164,47 @@ export interface ToolBreakdownSlice {
   color: string
 }
 
+/** One tool's share of all agentic tool calls (drives the usage breakdown). */
+export interface ToolCallStat {
+  /** Tool name as logged, e.g. "Bash", "Edit", "mcp__server__do_thing". */
+  name: string
+  calls: number
+  /** Tool results that errored for this tool. */
+  errors: number
+  /** 0–100 share of all tool calls. */
+  share: number
+  /** 0–100 success rate for this specific tool. */
+  successRate: number
+  /** Coarse grouping for filtering, e.g. "file" | "shell" | "search" | "agent". */
+  category: ToolCallCategory
+}
+
+export type ToolCallCategory = 'file' | 'shell' | 'search' | 'agent' | 'task' | 'other'
+
+/**
+ * Aggregated agentic activity across every session that recorded tool calls.
+ * Powers the Analytics "Agentic Activity" panel. `hasData` is false when no
+ * scanned tool exposes tool-call telemetry, so the UI can show an empty state.
+ */
+export interface AgenticSummary {
+  hasData: boolean
+  /** Sessions that recorded ≥1 tool call (denominator for the averages). */
+  sessionsWithTools: number
+  totalToolCalls: number
+  totalToolResults: number
+  totalToolErrors: number
+  totalAgentsSpawned: number
+  totalWorkflows: number
+  /** 0–100 overall tool-call success rate = (results − errors) / results. */
+  successRate: number
+  avgToolCallsPerSession: number
+  avgAgentsPerSession: number
+  /** Largest agent fan-out seen in a single session. */
+  maxAgentsInSession: number
+  /** Per-tool usage, ranked by call count (descending). */
+  toolUsage: ToolCallStat[]
+}
+
 /** Estimated spend grouped by model family. */
 export interface ModelCost {
   modelId: string
@@ -201,6 +265,8 @@ export interface MetricsSnapshot {
   /** Per-period tool breakdown driving the dashboard's period tab. */
   toolBreakdownByPeriod: Record<ChartGranularity, ToolBreakdownSlice[]>
   modelCosts: ModelCost[]
+  /** Aggregated agentic activity (agents spawned, tool-call accuracy, …). */
+  agentic: AgenticSummary
   recentSessions: Session[]
   daily: DailyUsage[]
 }
@@ -266,6 +332,7 @@ export type AchievementCategory =
   | 'tools'
   | 'ranking'
   | 'projects'
+  | 'agentic'
 
 export interface AchievementDef {
   id: string
@@ -401,11 +468,25 @@ export interface PrivacySettings {
   shareAnonymousUsage: boolean
 }
 
+export interface NotificationSettings {
+  /** Master switch for native desktop notifications. */
+  enabled: boolean
+  /** Daily token milestone alerts (100K, 500K, 1M, …). */
+  milestones: boolean
+  /** Evening reminder when a streak is at risk. */
+  streaks: boolean
+  /** Weekly / monthly Wrapped-ready alerts. */
+  wrapped: boolean
+  /** Achievement unlock toasts. */
+  achievements: boolean
+}
+
 export interface Settings {
   scanFrequency: ScanFrequency
   autoScanOnLaunch: boolean
   theme: ThemePreference
   privacy: PrivacySettings
+  notifications: NotificationSettings
   /** Per-tool scanning enable flags. */
   enabledTools: Record<ToolId, boolean>
   /** Display handle used on leaderboards. */

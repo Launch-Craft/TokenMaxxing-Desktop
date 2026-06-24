@@ -4,6 +4,7 @@ import type { DataStore } from '../db'
 import type { ScannerService } from '../scanner/ScannerService'
 import type { SettingsService } from './SettingsService'
 import type { AchievementEngine } from './AchievementEngine'
+import type { NotificationService } from './NotificationService'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('live-analysis')
@@ -32,7 +33,8 @@ export class LiveAnalysisService {
     private scanner: ScannerService,
     private store: DataStore,
     private settings: SettingsService,
-    private achievements: AchievementEngine
+    private achievements: AchievementEngine,
+    private notifications: NotificationService
   ) {}
 
   setBroadcast(fn: Broadcast): void {
@@ -71,8 +73,9 @@ export class LiveAnalysisService {
       const settings = this.settings.get(this.store)
       const result = await this.scanner.run(settings, this.store, { quiet: true })
       const changed = result.sourcesParsed > 0 || result.sourcesRemoved > 0
-      // Only re-evaluate achievements when fresh activity appeared.
+      const achievementsBefore = changed ? this.store.achievements.getUnlockMap() : undefined
       if (changed) this.achievements.evaluate(this.store)
+      this.notifications.check(this.store, achievementsBefore)
       const tick: AnalysisTick = {
         at: new Date().toISOString(),
         changed,

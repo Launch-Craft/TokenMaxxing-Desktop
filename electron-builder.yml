@@ -51,6 +51,11 @@ mac:
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
+  # Notarize via our afterSign hook (scripts/notarize.cjs) only. electron-builder
+  # 25 ALSO auto-notarizes when APPLE_* env vars are set — leaving both on means
+  # the app gets uploaded to Apple twice. Disabling the built-in path (as the
+  # BigBinary guide does) keeps a single, explicit notarize+staple step.
+  notarize: false
 
 # Stable DMG filename (no version/arch) → TokenMaxxing.dmg, so the download URL
 # never changes. The auto-update .zip keeps its default (versioned) name.

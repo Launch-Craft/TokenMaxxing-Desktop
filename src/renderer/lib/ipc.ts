@@ -99,6 +99,9 @@ const mockApi: TokenMaxxingApi = {
     signOut: () => delay<AuthState>({ status: 'signed-out', user: null }),
     onChange: () => () => {}
   },
+  notifications: {
+    onNavigate: () => () => {}
+  },
   privacy: {
     exportData: () => delay({ path: '~/Downloads/tokenmaxxing-export.json' }),
     deleteAllData: () => delay(undefined)

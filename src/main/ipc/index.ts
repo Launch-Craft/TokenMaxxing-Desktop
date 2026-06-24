@@ -69,9 +69,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   handle(IPC.scanRun, async () => {
     const settings = svc.settings.get(svc.store)
+    const achievementsBefore = svc.store.achievements.getUnlockMap()
     const result = await svc.scanner.run(settings, svc.store)
-    // Re-evaluate achievements right after a scan so new unlocks appear.
     svc.achievements.evaluate(svc.store)
+    svc.notifications.check(svc.store, achievementsBefore)
     return result
   })
   handle(IPC.scanStatus, () => svc.scanner.getStatus())
@@ -79,6 +80,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // ── Continuous local analysis (2s loop) ──────────────────────────────────────
   svc.live.setBroadcast((tick) => getWindow()?.webContents.send(IPC.analysisTick, tick))
   handle(IPC.analysisStatus, () => svc.live.getStatus())
+  svc.notifications.setNavigate((route) => {
+    const win = getWindow()
+    if (!win) return
+    win.show()
+    win.focus()
+    win.webContents.send(IPC.notificationNavigate, route)
+  })
 
   // ── Settings ─────────────────────────────────────────────────────────────────
   handle(IPC.settingsGet, () => svc.settings.get(svc.store))

@@ -17,7 +17,8 @@ export class AchievementEngine {
 
   evaluate(store: DataStore): Achievement[] {
     const totals = this.metrics.derivedTotals(store)
-    const longestStreak = this.metrics.buildSnapshot(store).stats.longestStreak
+    const snapshot = this.metrics.buildSnapshot(store)
+    const longestStreak = snapshot.stats.longestStreak
 
     const input: AchievementStatsInput = {
       totalTokens: totals.totalTokens,
@@ -28,6 +29,8 @@ export class AchievementEngine {
       totalCodingHours: totals.totalCodingHours,
       distinctToolsUsed: totals.distinctToolsUsed,
       projectCount: totals.projectCount,
+      agentsSpawned: snapshot.agentic.totalAgentsSpawned,
+      toolCalls: snapshot.agentic.totalToolCalls,
       globalPercentile: totals.totalTokens > 0 ? estimatePercentile(totals.totalTokens) : null
     }
 

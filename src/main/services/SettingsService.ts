@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  NotificationSettings,
   PrivacySettings,
   ScanFrequency,
   Settings,
@@ -22,9 +23,17 @@ const PRIVACY_KEYS: (keyof PrivacySettings)[] = [
   'rankingParticipation',
   'shareAnonymousUsage'
 ]
+const NOTIFICATION_KEYS: (keyof NotificationSettings)[] = [
+  'enabled',
+  'milestones',
+  'streaks',
+  'wrapped',
+  'achievements'
+]
 
-type SettingsPatch = Partial<Omit<Settings, 'privacy' | 'enabledTools'>> & {
+type SettingsPatch = Partial<Omit<Settings, 'privacy' | 'enabledTools' | 'notifications'>> & {
   privacy: Partial<PrivacySettings>
+  notifications: Partial<NotificationSettings>
   enabledTools: Partial<Record<ToolId, boolean>>
 }
 
@@ -35,7 +44,7 @@ type SettingsPatch = Partial<Omit<Settings, 'privacy' | 'enabledTools'>> & {
  */
 function sanitizeSettingsPatch(input: Partial<Settings>): SettingsPatch {
   const p = (input ?? {}) as Record<string, unknown>
-  const clean: SettingsPatch = { privacy: {}, enabledTools: {} }
+  const clean: SettingsPatch = { privacy: {}, notifications: {}, enabledTools: {} }
 
   if (typeof p.scanFrequency === 'string' && SCAN_FREQUENCIES.includes(p.scanFrequency as ScanFrequency)) {
     clean.scanFrequency = p.scanFrequency as ScanFrequency
@@ -52,6 +61,12 @@ function sanitizeSettingsPatch(input: Partial<Settings>): SettingsPatch {
   if (p.privacy && typeof p.privacy === 'object') {
     const src = p.privacy as Record<string, unknown>
     for (const k of PRIVACY_KEYS) if (typeof src[k] === 'boolean') clean.privacy[k] = src[k] as boolean
+  }
+  if (p.notifications && typeof p.notifications === 'object') {
+    const src = p.notifications as Record<string, unknown>
+    for (const k of NOTIFICATION_KEYS) {
+      if (typeof src[k] === 'boolean') clean.notifications[k] = src[k] as boolean
+    }
   }
   if (p.enabledTools && typeof p.enabledTools === 'object') {
     const src = p.enabledTools as Record<string, unknown>
@@ -78,6 +93,7 @@ export class SettingsService {
       ...current,
       ...clean,
       privacy: { ...current.privacy, ...clean.privacy },
+      notifications: { ...current.notifications, ...clean.notifications },
       enabledTools: { ...current.enabledTools, ...clean.enabledTools },
       version: SETTINGS_VERSION
     }
@@ -92,6 +108,7 @@ export class SettingsService {
       ...DEFAULT_SETTINGS,
       ...s,
       privacy: { ...DEFAULT_SETTINGS.privacy, ...s.privacy },
+      notifications: { ...DEFAULT_SETTINGS.notifications, ...s.notifications },
       enabledTools: { ...DEFAULT_SETTINGS.enabledTools, ...s.enabledTools },
       version: SETTINGS_VERSION
     }

@@ -12,12 +12,12 @@ import { applySessionFilter, type DataStore } from './DataStore'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('sqlite')
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 const SESSION_INSERT_SQL = `INSERT OR REPLACE INTO sessions
-  (id, tool_id, tool_name, project_name, est_tokens, input, output, cache_read, cache_create, started_at, ended_at, duration_min, message_count, model, source_key)
+  (id, tool_id, tool_name, project_name, est_tokens, input, output, cache_read, cache_create, started_at, ended_at, duration_min, message_count, model, agentic, source_key)
  VALUES
-  (@id, @tool_id, @tool_name, @project_name, @est_tokens, @input, @output, @cache_read, @cache_create, @started_at, @ended_at, @duration_min, @message_count, @model, @source_key)`
+  (@id, @tool_id, @tool_name, @project_name, @est_tokens, @input, @output, @cache_read, @cache_create, @started_at, @ended_at, @duration_min, @message_count, @model, @agentic, @source_key)`
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   duration_min  REAL NOT NULL,
   message_count INTEGER NOT NULL,
   model         TEXT,
+  agentic       TEXT,
   source_key    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
@@ -90,11 +91,20 @@ interface SessionRow {
   duration_min: number
   message_count: number
   model: string | null
+  agentic: string | null
   source_key: string | null
 }
 
 function rowToSession(r: SessionRow): Session {
   const total = r.est_tokens
+  let agentic: Session['agentic']
+  if (r.agentic) {
+    try {
+      agentic = JSON.parse(r.agentic) as Session['agentic']
+    } catch {
+      agentic = undefined
+    }
+  }
   return {
     id: r.id,
     toolId: r.tool_id as Session['toolId'],
@@ -113,6 +123,7 @@ function rowToSession(r: SessionRow): Session {
     durationMinutes: r.duration_min,
     messageCount: r.message_count,
     model: r.model,
+    agentic,
     sourceKey: r.source_key ?? undefined
   }
 }
@@ -144,13 +155,15 @@ export class SqliteDataStore implements DataStore {
       log.warn(`database schema v${current} is newer than this app (v${SCHEMA_VERSION})`)
       return
     }
-    if (current < 2) {
-      // v2: incremental scanning — add source_key to sessions (table/index +
-      // scan_checkpoints are created by the idempotent schema above).
+    if (current < 3) {
+      // v2: incremental scanning — add source_key to sessions.
+      // v3: agentic activity — add the agentic JSON column. Both adds are
+      // idempotent (guarded by table_info) so a fresh DB created by the schema
+      // above is skipped, and an old DB picks up only its missing columns.
       const cols = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>
-      if (!cols.some((c) => c.name === 'source_key')) {
-        this.db.exec('ALTER TABLE sessions ADD COLUMN source_key TEXT')
-      }
+      const has = (name: string): boolean => cols.some((c) => c.name === name)
+      if (!has('source_key')) this.db.exec('ALTER TABLE sessions ADD COLUMN source_key TEXT')
+      if (!has('agentic')) this.db.exec('ALTER TABLE sessions ADD COLUMN agentic TEXT')
     }
     if (current < SCHEMA_VERSION) {
       this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
@@ -189,6 +202,7 @@ export class SqliteDataStore implements DataStore {
       duration_min: s.durationMinutes,
       message_count: s.messageCount,
       model: s.model,
+      agentic: s.agentic ? JSON.stringify(s.agentic) : null,
       source_key: s.sourceKey ?? null
     }
   }

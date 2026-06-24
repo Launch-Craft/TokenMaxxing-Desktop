@@ -152,6 +152,36 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     target: 50
   },
 
+  // ── Agentic ─────────────────────────────────────────────────────────
+  {
+    id: 'agent-summoner',
+    name: 'Agent Summoner',
+    description: 'Spawn 10 subagents to do your bidding.',
+    icon: 'Bot',
+    tier: 'bronze',
+    category: 'agentic',
+    target: 10
+  },
+  {
+    id: 'agent-orchestrator',
+    name: 'Agent Orchestrator',
+    description: 'Command 500 subagents across your sessions.',
+    icon: 'Network',
+    tier: 'gold',
+    category: 'agentic',
+    target: 500,
+    hint: 'Delegate work with the Agent/Task tool.'
+  },
+  {
+    id: 'tool-virtuoso',
+    name: 'Tool Virtuoso',
+    description: 'Rack up 10,000 agent tool calls.',
+    icon: 'Wrench',
+    tier: 'gold',
+    category: 'agentic',
+    target: 10_000
+  },
+
   // ── Ranking ─────────────────────────────────────────────────────────
   {
     id: 'builder-elite',
@@ -174,6 +204,10 @@ export interface AchievementStatsInput {
   totalCodingHours: number
   distinctToolsUsed: number
   projectCount: number
+  /** Total subagents spawned across all sessions (Agent/Task tool calls). */
+  agentsSpawned: number
+  /** Total agent tool calls across all sessions. */
+  toolCalls: number
   /** 0–100 global percentile (higher is better), or null if unknown. */
   globalPercentile: number | null
 }
@@ -194,6 +228,9 @@ const METRIC_BY_ID: Record<string, (s: AchievementStatsInput) => number> = {
   polyglot: (s) => s.distinctToolsUsed,
   'project-pioneer': (s) => s.projectCount,
   'open-sourcerer': (s) => s.projectCount,
+  'agent-summoner': (s) => s.agentsSpawned,
+  'agent-orchestrator': (s) => s.agentsSpawned,
+  'tool-virtuoso': (s) => s.toolCalls,
   'builder-elite': (s) => s.globalPercentile ?? 0
 }
 

@@ -4,6 +4,7 @@ import { AchievementEngine } from './AchievementEngine'
 import { AuthService } from './AuthService'
 import { LiveAnalysisService } from './LiveAnalysisService'
 import { MetricsService } from './MetricsService'
+import { NotificationService } from './NotificationService'
 import { RankingService } from './RankingService'
 import { SettingsService } from './SettingsService'
 import { SyncService } from './SyncService'
@@ -19,6 +20,7 @@ export interface Services {
   sync: SyncService
   rankings: RankingService
   achievements: AchievementEngine
+  notifications: NotificationService
   wrapped: WrappedService
   auth: AuthService
 }
@@ -33,15 +35,17 @@ export function createServices(): Services {
   const settings = new SettingsService()
   const scanner = new ScannerService()
   const achievements = new AchievementEngine(metrics)
+  const notifications = new NotificationService(metrics, settings)
   services = {
     store,
     settings,
     scanner,
-    live: new LiveAnalysisService(scanner, store, settings, achievements),
+    live: new LiveAnalysisService(scanner, store, settings, achievements, notifications),
     metrics,
     sync,
     rankings: new RankingService(metrics, sync),
     achievements,
+    notifications,
     wrapped: new WrappedService(),
     auth: new AuthService(store)
   }

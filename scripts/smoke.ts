@@ -52,6 +52,15 @@ async function main(): Promise<void> {
   console.log('daily points:', snap.series.daily.length, '| monthly:', snap.series.monthly.length)
   console.log('recent:', snap.recentSessions.slice(0, 3).map((s) => `${s.projectName}=${s.estimatedTokens.toLocaleString()}`).join(', '))
 
+  const ag = snap.agentic
+  console.log('\n── agentic activity ─────────────────────────')
+  console.log('has data:', ag.hasData, '| agentic sessions:', ag.sessionsWithTools.toLocaleString())
+  console.log('agents spawned:', ag.totalAgentsSpawned.toLocaleString(), `(avg ${ag.avgAgentsPerSession}/session, peak ${ag.maxAgentsInSession})`)
+  console.log('workflows:', ag.totalWorkflows.toLocaleString())
+  console.log('tool calls:', ag.totalToolCalls.toLocaleString(), `(avg ${ag.avgToolCallsPerSession}/session)`)
+  console.log('tool-call accuracy:', ag.successRate + '%', `(${ag.totalToolErrors.toLocaleString()} errors / ${ag.totalToolResults.toLocaleString()} results)`)
+  console.log('top tools:', ag.toolUsage.slice(0, 8).map((t) => `${t.name} ${t.calls.toLocaleString()} (${t.share}%)`).join(', ') || 'none')
+
   console.log('\n── recent sessions (what the row shows = estimatedTokens) ──')
   for (const s of snap.recentSessions.slice(0, 4)) {
     const b = s.tokenBreakdown

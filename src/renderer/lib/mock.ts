@@ -7,8 +7,11 @@ import {
   synthesizeLeaderboard
 } from '@shared/ranking'
 import { costForBreakdown, priceForModel } from '@shared/pricing'
+import { classifyToolCategory } from '@shared/agentic'
 import type {
   Achievement,
+  AgenticStats,
+  AgenticSummary,
   ChartGranularity,
   DailyUsage,
   MetricsSnapshot,
@@ -20,6 +23,7 @@ import type {
   Settings,
   TimeSeriesPoint,
   ToolBreakdownSlice,
+  ToolCallStat,
   ToolId,
   WrappedReport
 } from '@shared/types'
@@ -97,7 +101,9 @@ function generate(): { daily: DailyUsage[]; sessions: Session[] } {
           endedAt: new Date(start.getTime() + minutes * 60_000).toISOString(),
           durationMinutes: minutes,
           messageCount: 5 + Math.floor(rand() * 60),
-          model: MODELS[Math.floor(rand() * MODELS.length)]
+          model: MODELS[Math.floor(rand() * MODELS.length)],
+          // Only Claude Code records tool-call telemetry in reality.
+          agentic: tool === 'claude-code' ? mockAgentic(rand) : undefined
         })
         byTool[tool] = (byTool[tool] ?? 0) + tokens
         dayTokens += tokens
@@ -127,6 +133,96 @@ function bucketMonthly(daily: DailyUsage[]): TimeSeriesPoint[] {
     })
   }
   return out
+}
+
+/** Realistic per-session tool-call telemetry for a mock Claude Code session. */
+const MOCK_TOOL_WEIGHTS: [string, number][] = [
+  ['Bash', 30], ['Edit', 26], ['Read', 22], ['Write', 6], ['Grep', 5],
+  ['TodoWrite', 4], ['Glob', 3], ['Agent', 2], ['Workflow', 1], ['WebFetch', 1]
+]
+
+function mockAgentic(rand: () => number): AgenticStats {
+  const total = 20 + Math.floor(rand() * 180)
+  const byTool: Record<string, number> = {}
+  for (let i = 0; i < total; i++) {
+    let pick = rand() * MOCK_TOOL_WEIGHTS.reduce((s, [, w]) => s + w, 0)
+    for (const [name, w] of MOCK_TOOL_WEIGHTS) {
+      pick -= w
+      if (pick <= 0) {
+        byTool[name] = (byTool[name] ?? 0) + 1
+        break
+      }
+    }
+  }
+  const toolResults = total
+  const toolErrors = Math.round(total * (0.005 + rand() * 0.03))
+  return {
+    toolCalls: total,
+    toolResults,
+    toolErrors,
+    agentsSpawned: byTool['Agent'] ?? 0,
+    workflows: byTool['Workflow'] ?? 0,
+    byTool
+  }
+}
+
+/** Mirror of MetricsService.computeAgentic for the in-browser demo dataset. */
+function summarizeAgentic(sessions: Session[]): AgenticSummary {
+  let sessionsWithTools = 0
+  let totalToolCalls = 0
+  let totalToolResults = 0
+  let totalToolErrors = 0
+  let totalAgentsSpawned = 0
+  let totalWorkflows = 0
+  let maxAgentsInSession = 0
+  const byTool = new Map<string, { calls: number; errors: number }>()
+  for (const s of sessions) {
+    const a = s.agentic
+    if (!a || a.toolCalls === 0) continue
+    sessionsWithTools++
+    totalToolCalls += a.toolCalls
+    totalToolResults += a.toolResults
+    totalToolErrors += a.toolErrors
+    totalAgentsSpawned += a.agentsSpawned
+    totalWorkflows += a.workflows
+    maxAgentsInSession = Math.max(maxAgentsInSession, a.agentsSpawned)
+    const errRate = a.toolResults > 0 ? a.toolErrors / a.toolResults : 0
+    for (const [name, calls] of Object.entries(a.byTool)) {
+      const t = byTool.get(name) ?? { calls: 0, errors: 0 }
+      t.calls += calls
+      t.errors += calls * errRate
+      byTool.set(name, t)
+    }
+  }
+  const toolUsage: ToolCallStat[] = [...byTool.entries()]
+    .map(([name, v]) => ({
+      name,
+      calls: v.calls,
+      errors: Math.round(v.errors),
+      share: totalToolCalls > 0 ? Number(((v.calls / totalToolCalls) * 100).toFixed(1)) : 0,
+      successRate: v.calls > 0 ? Number((((v.calls - v.errors) / v.calls) * 100).toFixed(1)) : 100,
+      category: classifyToolCategory(name)
+    }))
+    .sort((a, b) => b.calls - a.calls)
+  return {
+    hasData: sessionsWithTools > 0,
+    sessionsWithTools,
+    totalToolCalls,
+    totalToolResults,
+    totalToolErrors,
+    totalAgentsSpawned,
+    totalWorkflows,
+    successRate:
+      totalToolResults > 0
+        ? Number((((totalToolResults - totalToolErrors) / totalToolResults) * 100).toFixed(1))
+        : 100,
+    avgToolCallsPerSession:
+      sessionsWithTools > 0 ? Number((totalToolCalls / sessionsWithTools).toFixed(1)) : 0,
+    avgAgentsPerSession:
+      sessionsWithTools > 0 ? Number((totalAgentsSpawned / sessionsWithTools).toFixed(1)) : 0,
+    maxAgentsInSession,
+    toolUsage
+  }
 }
 
 export function mockSnapshot(): MetricsSnapshot {
@@ -321,6 +417,7 @@ export function mockSnapshot(): MetricsSnapshot {
     toolBreakdown,
     toolBreakdownByPeriod,
     modelCosts,
+    agentic: summarizeAgentic(sessions),
     recentSessions: [...sessions].sort((a, b) => +new Date(b.startedAt) - +new Date(a.startedAt)).slice(0, 8),
     daily
   }
@@ -342,6 +439,8 @@ export function mockAchievements(): Achievement[] {
       totalCodingHours: 420,
       distinctToolsUsed: 5,
       projectCount: 14,
+      agentsSpawned: snap.agentic.totalAgentsSpawned,
+      toolCalls: snap.agentic.totalToolCalls,
       globalPercentile: estimatePercentile(snap.stats.totalTokens)
     },
     {},

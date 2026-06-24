@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       sign:
-        description: 'Sign + notarize with Apple (clean install, ~20-30 min). Untick for a fast ad-hoc test build (shows a Gatekeeper warning).'
+        description: 'Try signing + notarizing in CI (UNRELIABLE — codesign hangs on hosted runners). Prefer `npm run release:local` on your Mac. Default off = fast unsigned build.'
         type: boolean
-        default: true
+        default: false
 
 # Lets the built-in GITHUB_TOKEN create the GitHub Release + tag.
 permissions:
@@ -20,7 +20,7 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest # Apple Silicon runner → arm64 build
-    timeout-minutes: 90 # signing + Apple notarization can legitimately take 45-60 min
+    timeout-minutes: 30 # unsigned builds are ~5 min; bounds a manual signed run that hangs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,7 +72,7 @@ jobs:
       # and the build hangs until it times out. Skipped for fast/unsigned builds.
       # (v3 is stable and battle-tested; v6/v7 exist with the same inputs.)
       - name: Import signing certificate
-        if: steps.guard.outputs.exists == 'false' && github.event.inputs.sign != 'false'
+        if: steps.guard.outputs.exists == 'false' && github.event.inputs.sign == 'true'
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.CSC_LINK }}
@@ -82,16 +82,12 @@ jobs:
         if: steps.guard.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Apple signing + notarization runs by default so users get a clean
-          # install (no Gatekeeper warning). It's slow (~20-30 min on Apple's
-          # servers) but fully automatic. For a fast ad-hoc test build, run the
-          # workflow manually and untick "sign".
-          #
-          # NOTE: we deliberately do NOT pass CSC_LINK here. The cert is already in
-          # the keychain from the "Import signing certificate" step, and
-          # electron-builder auto-discovers it. Passing CSC_LINK would make
-          # electron-builder build its own keychain instead — the path that hangs.
-          SIGN: ${{ github.event.inputs.sign == 'false' && 'false' || 'true' }}
+          # CI defaults to a FAST UNSIGNED build. Signed/notarized releases are
+          # produced on a Mac via `npm run release:local` — codesign reliably hangs
+          # on GitHub's hosted runners (keychain access + Apple's timestamp server),
+          # so we don't sign here by default. Manual sign=true is opt-in but still
+          # prone to hanging; local is the supported path.
+          SIGN: ${{ github.event.inputs.sign == 'true' && 'true' || 'false' }}
           # Notarization creds (used by scripts/notarize.cjs). Only used when SIGN=true.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

@@ -1,4 +1,5 @@
 import type {
+  AgenticSummary,
   ChartGranularity,
   DailyUsage,
   DashboardStats,
@@ -8,10 +9,12 @@ import type {
   Session,
   TimeSeriesPoint,
   ToolBreakdownSlice,
+  ToolCallStat,
   ToolId,
   ToolMetrics
 } from '@shared/types'
 import { TOOL_META } from '@shared/constants'
+import { classifyToolCategory } from '@shared/agentic'
 import { estimatePercentile, percentileToRank } from '@shared/ranking'
 import { costForBreakdown, priceForModel } from '@shared/pricing'
 import type { DataStore } from '../db'
@@ -52,6 +55,7 @@ export class MetricsService {
       toolBreakdown: this.toolBreakdown(toolMetrics, costByTool),
       toolBreakdownByPeriod: this.toolBreakdownByPeriod(sessions),
       modelCosts,
+      agentic: this.computeAgentic(sessions),
       recentSessions: [...sessions]
         .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
         .slice(0, 8),
@@ -93,6 +97,85 @@ export class MetricsService {
       }))
       .sort((a, b) => b.costUsd - a.costUsd)
     return { costByTool, modelCosts }
+  }
+
+  // ── Agentic activity ─────────────────────────────────────────────────────────
+
+  /**
+   * Roll every session's {@link AgenticStats} into the dashboard summary:
+   * total/average tool calls, agents spawned, tool-call success rate, and a
+   * per-tool usage ranking. Sessions without agentic telemetry are ignored, so
+   * averages reflect only tools that actually report tool calls.
+   */
+  private computeAgentic(sessions: Session[]): AgenticSummary {
+    let sessionsWithTools = 0
+    let totalToolCalls = 0
+    let totalToolResults = 0
+    let totalToolErrors = 0
+    let totalAgentsSpawned = 0
+    let totalWorkflows = 0
+    let maxAgentsInSession = 0
+    const byTool = new Map<string, { calls: number; errors: number }>()
+
+    for (const s of sessions) {
+      const a = s.agentic
+      if (!a || a.toolCalls === 0) continue
+      sessionsWithTools++
+      totalToolCalls += a.toolCalls
+      totalToolResults += a.toolResults
+      totalToolErrors += a.toolErrors
+      totalAgentsSpawned += a.agentsSpawned
+      totalWorkflows += a.workflows
+      maxAgentsInSession = Math.max(maxAgentsInSession, a.agentsSpawned)
+      // Distribute the session's errors across its tools proportionally to calls
+      // (per-tool error attribution isn't recorded; this keeps the rate honest
+      // in aggregate without claiming false precision per tool).
+      const errRate = a.toolResults > 0 ? a.toolErrors / a.toolResults : 0
+      for (const [name, calls] of Object.entries(a.byTool)) {
+        const t = byTool.get(name) ?? { calls: 0, errors: 0 }
+        t.calls += calls
+        t.errors += calls * errRate
+        byTool.set(name, t)
+      }
+    }
+
+    const toolUsage: ToolCallStat[] = [...byTool.entries()]
+      .map(([name, v]) => ({
+        name,
+        calls: v.calls,
+        errors: Math.round(v.errors),
+        share: totalToolCalls > 0 ? Number(((v.calls / totalToolCalls) * 100).toFixed(1)) : 0,
+        successRate:
+          v.calls > 0 ? Number((((v.calls - v.errors) / v.calls) * 100).toFixed(1)) : 100,
+        category: classifyToolCategory(name)
+      }))
+      .sort((a, b) => b.calls - a.calls)
+
+    const successRate =
+      totalToolResults > 0
+        ? Number((((totalToolResults - totalToolErrors) / totalToolResults) * 100).toFixed(1))
+        : 100
+
+    return {
+      hasData: sessionsWithTools > 0,
+      sessionsWithTools,
+      totalToolCalls,
+      totalToolResults,
+      totalToolErrors,
+      totalAgentsSpawned,
+      totalWorkflows,
+      successRate,
+      avgToolCallsPerSession:
+        sessionsWithTools > 0
+          ? Number((totalToolCalls / sessionsWithTools).toFixed(1))
+          : 0,
+      avgAgentsPerSession:
+        sessionsWithTools > 0
+          ? Number((totalAgentsSpawned / sessionsWithTools).toFixed(1))
+          : 0,
+      maxAgentsInSession,
+      toolUsage
+    }
   }
 
   // ── Stats ──────────────────────────────────────────────────────────────────

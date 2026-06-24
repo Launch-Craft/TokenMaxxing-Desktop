@@ -70,6 +70,9 @@ const api: TokenMaxxingApi = {
     signOut: () => ipcRenderer.invoke(IPC.authSignOut) as Promise<AuthState>,
     onChange: (cb) => subscribe<AuthState>(IPC.authChanged, cb)
   },
+  notifications: {
+    onNavigate: (cb) => subscribe<string>(IPC.notificationNavigate, cb)
+  },
   privacy: {
     exportData: () => ipcRenderer.invoke(IPC.privacyExport) as Promise<{ path: string } | null>,
     deleteAllData: () => ipcRenderer.invoke(IPC.privacyDeleteAll) as Promise<void>

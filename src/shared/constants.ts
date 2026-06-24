@@ -2,7 +2,7 @@ import type { ToolId, Settings } from './types'
 
 export const APP_NAME = 'TokenMaxxing'
 export const APP_TAGLINE = 'GitHub Contributions × Spotify Wrapped, for AI developers'
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
 
 /**
  * Continuous local analysis cadence: while the app is open, the main process
@@ -135,6 +135,13 @@ export const DEFAULT_SETTINGS: Settings = {
     cloudSyncEnabled: false,
     rankingParticipation: false,
     shareAnonymousUsage: false
+  },
+  notifications: {
+    enabled: true,
+    milestones: true,
+    streaks: true,
+    wrapped: true,
+    achievements: true
   },
   enabledTools: {
     'claude-code': true,

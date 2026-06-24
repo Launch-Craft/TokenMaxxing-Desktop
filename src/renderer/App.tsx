@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useNavigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppShell } from '@/components/layout/AppShell'
 import { AuthGate } from '@/components/auth/AuthGate'
@@ -10,6 +10,7 @@ import { useMetricsStore } from '@/stores/useMetricsStore'
 import { useRankingsStore } from '@/stores/useRankingsStore'
 import { useScannerStore } from '@/stores/useScannerStore'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { client, isElectron } from '@/lib/ipc'
 import Dashboard from '@/pages/Dashboard'
 import Analytics from '@/pages/Analytics'
 import Sessions from '@/pages/Sessions'
@@ -18,6 +19,7 @@ import Settings from '@/pages/Settings'
 import Wrapped from '@/pages/Wrapped'
 
 export default function App(): JSX.Element {
+  const navigate = useNavigate()
   const authStatus = useAuthStore((s) => s.auth.status)
   const hasData = useMetricsStore((s) => (s.snapshot?.stats.totalTokens ?? 0) > 0)
 
@@ -36,6 +38,11 @@ export default function App(): JSX.Element {
       unsubAuth()
     }
   }, [])
+
+  useEffect(() => {
+    if (!isElectron) return
+    return client.notifications.onNavigate((route) => navigate(route))
+  }, [navigate])
 
   // Once signed in, poll the server leaderboard on the 60s cadence.
   useEffect(() => {

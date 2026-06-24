@@ -18,6 +18,7 @@ prebuilds/
 .env
 .env.local
 .env.*.local
+.env.release
 
 # Local database (never commit user data)
 *.sqlite

@@ -1,7 +1,8 @@
 import { createReadStream } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
-import type { Session } from '@shared/types'
+import type { AgenticStats, Session } from '@shared/types'
+import { emptyAgentic, hasAgenticSignal, isAgentTool, isWorkflowTool } from '@shared/agentic'
 import { ToolAdapter, type ScanContext, type SourceRef } from './ToolAdapter'
 import { hashId, pathExists, safeReaddir, safeStat } from '../aggregate'
 import { finalizeBreakdown } from '../tokenEstimation'
@@ -67,6 +68,7 @@ export class ClaudeAdapter extends ToolAdapter {
     let lastTs: number | null = null
     let model: string | null = null
     let cwd: string | null = null
+    const agentic = emptyAgentic()
 
     try {
       const rl = createInterface({
@@ -94,7 +96,7 @@ export class ClaudeAdapter extends ToolAdapter {
 
         if (type === 'assistant') {
           const message = obj.message as
-            | { usage?: Record<string, number>; model?: string }
+            | { usage?: Record<string, number>; model?: string; content?: unknown }
             | undefined
           const usage = message?.usage
           if (usage) {
@@ -104,6 +106,11 @@ export class ClaudeAdapter extends ToolAdapter {
             cacheCreate += Number(usage.cache_creation_input_tokens) || 0
           }
           if (!model && typeof message?.model === 'string') model = message.model
+          this.countContentBlocks(message?.content, agentic)
+        } else if (type === 'user') {
+          // Tool results are fed back as `user` turns; they carry the is_error flag.
+          const message = obj.message as { content?: unknown } | undefined
+          this.countContentBlocks(message?.content, agentic)
         }
       }
     } catch {
@@ -127,7 +134,31 @@ export class ClaudeAdapter extends ToolAdapter {
       endedAt: new Date(lastTs).toISOString(),
       durationMinutes,
       messageCount,
-      model
+      model,
+      agentic: hasAgenticSignal(agentic) ? agentic : undefined
+    }
+  }
+
+  /**
+   * Tally `tool_use` / `tool_result` content blocks into the agentic counters.
+   * Only block `type`, tool `name` and the `is_error` flag are read — never the
+   * tool's input arguments or output text.
+   */
+  private countContentBlocks(content: unknown, agentic: AgenticStats): void {
+    if (!Array.isArray(content)) return
+    for (const block of content) {
+      if (!block || typeof block !== 'object') continue
+      const b = block as Record<string, unknown>
+      if (b.type === 'tool_use') {
+        const name = typeof b.name === 'string' && b.name ? b.name : 'unknown'
+        agentic.toolCalls++
+        agentic.byTool[name] = (agentic.byTool[name] ?? 0) + 1
+        if (isAgentTool(name)) agentic.agentsSpawned++
+        else if (isWorkflowTool(name)) agentic.workflows++
+      } else if (b.type === 'tool_result') {
+        agentic.toolResults++
+        if (b.is_error === true) agentic.toolErrors++
+      }
     }
   }
 

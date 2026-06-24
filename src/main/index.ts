@@ -96,8 +96,10 @@ if (!gotLock) {
       runScan: async () => {
         // Never scan while signed out — keeps logged-out state data-free.
         if (svc.auth.getState().status !== 'signed-in') return
+        const achievementsBefore = svc.store.achievements.getUnlockMap()
         await svc.scanner.run(svc.settings.get(svc.store), svc.store)
         svc.achievements.evaluate(svc.store)
+        svc.notifications.check(svc.store, achievementsBefore)
       }
     })
     tray.init()
@@ -142,8 +144,10 @@ async function maybeAutoScan(): Promise<void> {
         !lastScan)
     if (!shouldScan) return
     log.info('running auto-scan on launch…')
+    const achievementsBefore = svc.store.achievements.getUnlockMap()
     await svc.scanner.run(settings, svc.store)
     svc.achievements.evaluate(svc.store)
+    svc.notifications.check(svc.store, achievementsBefore)
   } catch (err) {
     log.error('auto-scan failed:', (err as Error).message)
   }

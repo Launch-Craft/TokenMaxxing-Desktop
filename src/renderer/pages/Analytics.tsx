@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ContributionGraph } from '@/components/charts/ContributionGraph'
 import { ToolStackChart } from '@/components/charts/ToolStackChart'
+import { AgenticPanel } from '@/components/dashboard/AgenticPanel'
 import { ToolBreakdownChart } from '@/components/dashboard/ToolBreakdownChart'
 import { ToolDot } from '@/components/common/ToolBadge'
 import { useMetricsStore } from '@/stores/useMetricsStore'
@@ -115,6 +116,12 @@ export default function Analytics(): JSX.Element {
           <Skeleton className="h-[160px] w-full" />
         )}
       </Card>
+
+      {snapshot ? (
+        <AgenticPanel agentic={snapshot.agentic} />
+      ) : (
+        <Skeleton className="mt-5 h-[120px] w-full" />
+      )}
 
       <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">

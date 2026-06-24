@@ -58,6 +58,9 @@ export const IPC = {
   authSignOut: 'auth:sign-out',
   authChanged: 'auth:changed', // main → renderer event
 
+  // Notifications
+  notificationNavigate: 'notification:navigate', // main → renderer event
+
   // Privacy
   privacyExport: 'privacy:export',
   privacyDeleteAll: 'privacy:delete-all'
@@ -130,6 +133,9 @@ export interface TokenMaxxingApi {
     signIn(provider: AuthProvider): Promise<AuthState>
     signOut(): Promise<AuthState>
     onChange(cb: (state: AuthState) => void): () => void
+  }
+  notifications: {
+    onNavigate(cb: (route: string) => void): () => void
   }
   privacy: {
     exportData(): Promise<{ path: string } | null>
